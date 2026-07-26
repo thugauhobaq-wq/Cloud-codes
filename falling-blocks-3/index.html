@@ -365,8 +365,79 @@
     font-weight: 900;
   }
 
-  /* кнопки заказа кликабельны и после падения */
-  .fallen[data-order] { cursor: pointer; }
+  /* ---------- гнездо кнопки заказа ---------- */
+  .slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 3px dashed rgba(51,38,10,.45);
+    border-radius: 16px;
+    background: rgba(255,255,255,.28);
+    color: rgba(51,38,10,.6);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: center;
+    transition: background .15s, border-color .15s, transform .15s;
+  }
+
+  .slot.hot {
+    background: #fff;
+    border-color: #FF9F1C;
+    border-style: solid;
+    color: #33260A;
+    transform: scale(1.07);
+  }
+
+  /* кнопка, установленная в гнездо, — «живая» */
+  [data-order].installed {
+    box-shadow: 5px 5px 0 rgba(51,38,10,.3), 0 0 0 4px rgba(255,159,28,.55);
+    animation: snapIn .4s;
+  }
+
+  .btn.small[data-order].installed {
+    box-shadow: 4px 4px 0 rgba(51,38,10,.25), 0 0 0 4px rgba(255,159,28,.55);
+  }
+
+  @keyframes snapIn {
+    0%   { transform: scale(1.18); }
+    60%  { transform: scale(.94); }
+    100% { transform: none; }
+  }
+
+  /* быстрая доводка при установке в гнездо */
+  .returning.snap { transition-duration: .34s; }
+
+  /* ---------- подсказка ---------- */
+  .hint {
+    position: fixed;
+    left: 22px;
+    bottom: 24px;
+    z-index: 1000;
+    max-width: 270px;
+    padding: 11px 16px;
+    background: #fff;
+    border: 3px solid #33260A;
+    border-radius: 16px;
+    box-shadow: 5px 5px 0 rgba(51,38,10,.28);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity .25s, transform .25s;
+  }
+
+  .hint.show { opacity: 1; transform: none; }
+  .hint.flash { animation: hintShake .45s; }
+
+  @keyframes hintShake {
+    0%, 100% { transform: none; }
+    25%      { transform: translateX(-7px); }
+    75%      { transform: translateX(7px); }
+  }
 
   /* ---------- панель управления ---------- */
   .hud {
@@ -417,7 +488,7 @@
   <main>
     <div class="badge fall">☀️ Свежая партия — каждое утро</div>
     <h1 class="fall">Самый жёлтый лимонад в городе</h1>
-    <p class="subtitle fall">Наведи мышку на любой элемент — и он упадёт. Упавшие штуки можно хватать и швырять!</p>
+    <p class="subtitle fall">Наведи мышку на любой элемент — и он упадёт. Упавшие штуки можно хватать и швырять, а кнопку заказа — вставить обратно в пунктирную рамку, чтобы она заработала.</p>
     <div class="cta">
       <button class="btn fall" data-order type="button">Хочу стакан 🥤</button>
       <button class="btn ghost fall">Секретный рецепт</button>
@@ -455,6 +526,8 @@
   <div class="hud">
     <button id="resetBtn">🧹 Собрать обратно</button>
   </div>
+
+  <div class="hint" id="hint">🔩 Кнопка заказа выпала! Возьми её мышкой и вставь обратно в пунктирную рамку — тогда можно будет заказать.</div>
 
   <div class="overlay" id="orderOverlay" role="dialog" aria-modal="true" aria-labelledby="orderTitle">
     <div class="modal" id="orderModal">
@@ -839,18 +912,19 @@
     applyImpulse(b, fx * mass * dt, fy * mass * dt, rx, ry);
   }
 
+  function pointInBody(b, x, y) {
+    if (b.type === 'circle') return Math.hypot(x - b.pos.x, y - b.pos.y) <= b.r;
+    const c = Math.cos(b.angle), s = Math.sin(b.angle);
+    const dx = x - b.pos.x, dy = y - b.pos.y;
+    const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+    return Math.abs(lx) <= b.w / 2 && Math.abs(ly) <= b.h / 2;
+  }
+
   function bodyAtPoint(x, y) {
     for (let i = world.bodies.length - 1; i >= 0; i--) {
       const b = world.bodies[i];
       if (!b.invMass) continue;
-      if (b.type === 'circle') {
-        if (Math.hypot(x - b.pos.x, y - b.pos.y) <= b.r) return b;
-      } else {
-        const c = Math.cos(b.angle), s = Math.sin(b.angle);
-        const dx = x - b.pos.x, dy = y - b.pos.y;
-        const lx = dx * c + dy * s, ly = -dx * s + dy * c;
-        if (Math.abs(lx) <= b.w / 2 && Math.abs(ly) <= b.h / 2) return b;
-      }
+      if (pointInBody(b, x, y)) return b;
     }
     return null;
   }
@@ -908,6 +982,13 @@
       makeBody({ x: -40, y: h / 2 - h * 2, w: 80, h: h * 6, isStatic: true, label: 'wall' }),
       makeBody({ x: w + 40, y: h / 2 - h * 2, w: 80, h: h * 6, isStatic: true, label: 'wall' })
     ];
+    // панель «Собрать обратно» — тоже препятствие: она перекрывает клики,
+    // и закатившуюся под неё кнопку заказа было бы не поднять
+    const hud = document.querySelector('.hud').getBoundingClientRect();
+    boundBodies.push(makeBody({
+      x: hud.left + hud.width / 2, y: hud.top + hud.height / 2,
+      w: hud.width, h: hud.height, isStatic: true, label: 'hud', friction: 0.6
+    }));
     boundBodies.forEach(addBody);
   }
 
@@ -938,8 +1019,15 @@
     const pos = getComputedStyle(el).position;
     if (pos !== 'absolute' && pos !== 'fixed') {
       const ph = document.createElement('span');
-      ph.style.cssText = 'display:inline-block;visibility:hidden;flex-shrink:0;' +
-        'width:' + rect.width + 'px;height:' + rect.height + 'px;';
+      const size = 'width:' + rect.width + 'px;height:' + rect.height + 'px;';
+      if (isOrderItem(item)) {
+        // у кнопки заказа заглушка видимая — это гнездо, куда её надо вернуть
+        ph.className = 'slot';
+        ph.textContent = 'сюда';
+        ph.style.cssText = size;
+      } else {
+        ph.style.cssText = 'display:inline-block;visibility:hidden;flex-shrink:0;' + size;
+      }
       item.parent.insertBefore(ph, el);
       item.placeholder = ph;
     } else {
@@ -962,6 +1050,9 @@
     }
     item.body = addBody(body);
     item.state = 'falling';
+    // выпала из гнезда — значит, заказ снова не работает
+    if (item.installed) { item.installed = false; el.classList.remove('installed'); }
+    updateHint();
   }
 
   /* ---------- цепная реакция ---------- */
@@ -993,6 +1084,80 @@
     item.state = 'idle';
     item.safeUntil = performance.now() + 600; // защита от мгновенного повторного падения
     makeObstacle(item);
+    updateHint();
+  }
+
+  /* ---------- гнездо кнопки заказа ---------- */
+  const hintEl = document.getElementById('hint');
+
+  function isOrderItem(item) { return item.el.hasAttribute('data-order'); }
+
+  function itemOf(el) {
+    for (const i of items) if (i.el === el) return i;
+    return null;
+  }
+
+  function nearRect(r, x, y, m) {
+    return x > r.left - m && x < r.right + m && y > r.top - m && y < r.bottom + m;
+  }
+
+  // Попадание засчитываем и по курсору, и по центру кнопки: на «пружине»
+  // кнопка отстаёт от мыши и раскачивается, так что одного центра мало
+  function slotHit(item, px, py) {
+    if (!item.placeholder || !item.body) return false;
+    const r = item.placeholder.getBoundingClientRect();
+    return nearRect(r, px, py, 30) || nearRect(r, item.body.pos.x, item.body.pos.y, 45);
+  }
+
+  // Упавшую кнопку заказа берём в первую очередь, даже если на неё сверху
+  // навалился другой элемент, — иначе вернуть её в гнездо мешает случайный мусор
+  function grabBodyAt(x, y) {
+    for (const i of items) {
+      if (isOrderItem(i) && i.state === 'falling' && i.body && pointInBody(i.body, x, y)) return i.body;
+    }
+    return bodyAtPoint(x, y);
+  }
+
+  function setHot(item, on) {
+    if (item.placeholder) item.placeholder.classList.toggle('hot', on);
+  }
+
+  function installItem(item) {
+    if (item.state !== 'falling') return;
+    const el = item.el;
+    const r = item.placeholder ? item.placeholder.getBoundingClientRect() : null;
+    const x = r ? r.left : item.home.x;
+    const y = r ? r.top : item.home.y;
+    item.state = 'returning';
+    if (item.body) { removeBody(item.body); item.body = null; }
+    setHot(item, false);
+    el.classList.add('returning', 'snap');
+    requestAnimationFrame(function () {
+      el.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(0rad)';
+    });
+    setTimeout(function () {
+      el.classList.remove('snap');
+      restore(item);
+      item.installed = true;
+      el.classList.add('installed');
+      updateHint();
+    }, 360);
+  }
+
+  function updateHint() {
+    hintEl.classList.toggle('show', items.some(function (i) {
+      return isOrderItem(i) && i.state === 'falling';
+    }));
+  }
+
+  let flashTimer = null;
+  function flashHint() {
+    updateHint();
+    hintEl.classList.remove('flash');
+    void hintEl.offsetWidth; // перезапуск анимации
+    hintEl.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { hintEl.classList.remove('flash'); }, 500);
   }
 
   function resetAll() {
@@ -1034,7 +1199,7 @@
     tap.el = closestSel(e.target, '[data-order]');
     tap.x = e.clientX; tap.y = e.clientY; tap.t = performance.now();
     if (closestSel(e.target, '.hud')) return;
-    const b = bodyAtPoint(e.clientX, e.clientY);
+    const b = grabBodyAt(e.clientX, e.clientY);
     if (!b) return;
     const c = Math.cos(b.angle), s = Math.sin(b.angle);
     const dx = e.clientX - b.pos.x, dy = e.clientY - b.pos.y;
@@ -1045,20 +1210,39 @@
   });
 
   window.addEventListener('pointermove', function (e) {
-    if (grab.body) grab.target = { x: e.clientX, y: e.clientY };
+    if (!grab.body) return;
+    grab.target = { x: e.clientX, y: e.clientY };
+    const it = grab.body.item;
+    if (it && isOrderItem(it) && it.state === 'falling') setHot(it, slotHit(it, e.clientX, e.clientY));
   });
 
   window.addEventListener('pointerup', function (e) {
+    const dragged = grab.body;
     grab.body = null;
     const el = tap.el;
     tap.el = null;
+
+    // отпустили кнопку заказа над её гнездом — она встаёт на место и оживает
+    if (dragged && dragged.item && isOrderItem(dragged.item) && dragged.item.state === 'falling') {
+      if (slotHit(dragged.item, e.clientX, e.clientY)) { installItem(dragged.item); return; }
+      setHot(dragged.item, false);
+    }
+
     if (!el || closestSel(e.target, '[data-order]') !== el) return;
     if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8) return;
     if (performance.now() - tap.t > 600) return;
-    openOrder(el);
+
+    const item = itemOf(el);
+    if (item && item.installed) openOrder(el);
+    else if (item && item.state === 'idle') drop(item); // на тач-экранах наведения нет
+    else flashHint();                                   // упавшая кнопка не заказывает
   });
 
-  window.addEventListener('pointercancel', function () { grab.body = null; tap.el = null; });
+  window.addEventListener('pointercancel', function () {
+    if (grab.body && grab.body.item) setHot(grab.body.item, false);
+    grab.body = null;
+    tap.el = null;
+  });
 
   /* ---------- цикл ---------- */
   let acc = 0, last = performance.now();
@@ -1210,19 +1394,22 @@
   /* ---------- инициализация ---------- */
   function init() {
     document.querySelectorAll('.fall').forEach(function (el) {
-      const item = { el: el, state: 'idle', body: null, obstacle: null };
+      const item = { el: el, state: 'idle', body: null, obstacle: null, installed: false };
       items.push(item);
-      // кнопки заказа не падают от наведения — иначе по ним не кликнуть;
-      // сбить их прилетевшим элементом по-прежнему можно
-      if (el.hasAttribute('data-order')) return;
-      el.addEventListener('mouseenter', function () { drop(item); });
+      // установленная в гнездо кнопка заказа держится: иначе по ней не кликнуть.
+      // Сбить её прилетевшим элементом по-прежнему можно — тогда заказ снова гаснет
+      el.addEventListener('mouseenter', function () { if (!item.installed) drop(item); });
     });
     buildBounds();
     items.forEach(makeObstacle);
     document.getElementById('resetBtn').addEventListener('click', resetAll);
     document.querySelectorAll('[data-order]').forEach(function (el) {
       // клавиатура: Enter/Пробел; мышь обрабатывается в pointerup
-      el.addEventListener('click', function () { openOrder(el); });
+      el.addEventListener('click', function () {
+        const item = itemOf(el);
+        if (item && item.installed) openOrder(el);
+        else flashHint();
+      });
     });
     refreshTotals();
     requestAnimationFrame(function (t) { last = t; requestAnimationFrame(frame); });
@@ -1258,6 +1445,8 @@
     } else if (item.parent) {
       item.parent.insertBefore(el, item.next);
     }
+    if (item.installed) { item.installed = false; el.classList.remove('installed'); }
+    updateHint();
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') init();
