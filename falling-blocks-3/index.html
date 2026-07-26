@@ -211,6 +211,163 @@
     transition: transform .65s cubic-bezier(.34, 1.45, .64, 1);
   }
 
+  /* ---------- окно оформления заказа ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(51,38,10,.55);
+    overflow-y: auto;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .overlay.open { display: flex; }
+
+  .modal {
+    position: relative;
+    background: #FFF8E1;
+    border: 4px solid #33260A;
+    border-radius: 24px;
+    box-shadow: 10px 10px 0 rgba(51,38,10,.35);
+    width: min(560px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    padding: 20px 24px 24px;
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .modal-head h2 { font-size: 23px; font-weight: 900; }
+  .modal-sub { font-size: 13px; font-weight: 700; color: #5C4A16; margin: 2px 0 12px; }
+
+  .modal-close {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 900;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: 3px solid #33260A;
+    border-radius: 50%;
+    background: #fff;
+    color: #33260A;
+    cursor: pointer;
+  }
+
+  .modal-close:hover { background: #FFD84D; }
+
+  .menu-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 2px dashed rgba(51,38,10,.25);
+  }
+
+  .menu-row .name { flex: 1; font-size: 15px; font-weight: 800; }
+  .menu-row .price { font-size: 14px; font-weight: 800; color: #5C4A16; white-space: nowrap; }
+
+  .qty { display: flex; align-items: center; gap: 7px; }
+
+  .qty button {
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 900;
+    width: 30px;
+    height: 30px;
+    border: 2px solid #33260A;
+    border-radius: 50%;
+    background: #fff;
+    color: #33260A;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .qty button:hover { background: #FFD84D; }
+  .qty .val { min-width: 20px; text-align: center; font-weight: 900; font-size: 16px; }
+
+  .field { margin-top: 12px; }
+  .field label { display: block; font-size: 13px; font-weight: 800; margin-bottom: 5px; }
+
+  .field input, .field textarea {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    width: 100%;
+    padding: 10px 12px;
+    border: 3px solid #33260A;
+    border-radius: 12px;
+    background: #fff;
+    color: #33260A;
+  }
+
+  .field textarea { resize: none; height: 60px; }
+  .field input:focus, .field textarea:focus { outline: 3px solid #FF9F1C; outline-offset: 1px; }
+  .field .err { display: none; font-size: 12px; font-weight: 800; color: #C0392B; margin-top: 4px; }
+  .field.invalid .err { display: block; }
+  .field.invalid input, .field.invalid textarea { border-color: #C0392B; }
+
+  .pay { display: flex; gap: 10px; margin-top: 12px; }
+
+  .pay label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 10px 12px;
+    background: #fff;
+    border: 3px solid #33260A;
+    border-radius: 12px;
+  }
+
+  .pay input { accent-color: #FF9F1C; width: 16px; height: 16px; }
+
+  .totals { margin-top: 16px; font-size: 14px; font-weight: 800; color: #5C4A16; }
+  .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+
+  .totals .grand {
+    font-size: 20px;
+    font-weight: 900;
+    color: #33260A;
+    border-top: 3px solid #33260A;
+    margin-top: 6px;
+    padding-top: 8px;
+  }
+
+  #orderSubmit { width: 100%; margin-top: 16px; }
+  #orderSubmit:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+
+  .done { text-align: center; padding: 8px 0 4px; }
+  .done .big { font-size: 54px; }
+  .done h2 { font-size: 23px; font-weight: 900; margin: 4px 0 8px; }
+  .done p { font-size: 15px; font-weight: 700; color: #5C4A16; line-height: 1.45; }
+
+  .done .num {
+    display: inline-block;
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #fff;
+    border: 3px solid #33260A;
+    border-radius: 999px;
+    font-weight: 900;
+  }
+
+  /* кнопки заказа кликабельны и после падения */
+  .fallen[data-order] { cursor: pointer; }
+
   /* ---------- панель управления ---------- */
   .hud {
     position: fixed;
@@ -249,7 +406,7 @@
       <a class="fall">Доставка</a>
       <a class="fall">О нас</a>
     </nav>
-    <button class="btn small fall">Заказать</button>
+    <button class="btn small fall" data-order type="button">Заказать</button>
   </header>
 
   <div class="sticker fall" id="st1" data-shape="circle">☀️</div>
@@ -262,7 +419,7 @@
     <h1 class="fall">Самый жёлтый лимонад в городе</h1>
     <p class="subtitle fall">Наведи мышку на любой элемент — и он упадёт. Упавшие штуки можно хватать и швырять!</p>
     <div class="cta">
-      <button class="btn fall">Хочу стакан 🥤</button>
+      <button class="btn fall" data-order type="button">Хочу стакан 🥤</button>
       <button class="btn ghost fall">Секретный рецепт</button>
     </div>
   </main>
@@ -297,6 +454,106 @@
 
   <div class="hud">
     <button id="resetBtn">🧹 Собрать обратно</button>
+  </div>
+
+  <div class="overlay" id="orderOverlay" role="dialog" aria-modal="true" aria-labelledby="orderTitle">
+    <div class="modal" id="orderModal">
+
+      <div id="orderStep">
+        <div class="modal-head">
+          <h2 id="orderTitle">🥤 Оформление заказа</h2>
+          <button class="modal-close" id="orderClose" type="button" aria-label="Закрыть">✕</button>
+        </div>
+        <p class="modal-sub">Собери свой стакан — привезём за 15 минут, пока не растаял лёд.</p>
+
+        <form id="orderForm" novalidate>
+          <div id="orderMenu">
+            <div class="menu-row" data-item="Классический лимонад" data-price="290">
+              <span class="name">🍋 Классический лимонад</span>
+              <span class="price">290 ₽</span>
+              <span class="qty">
+                <button type="button" data-step="-1" aria-label="Убрать один">−</button>
+                <span class="val">0</span>
+                <button type="button" data-step="1" aria-label="Добавить один">+</button>
+              </span>
+            </div>
+            <div class="menu-row" data-item="Лаймовый вихрь" data-price="320">
+              <span class="name">🌪️ Лаймовый вихрь</span>
+              <span class="price">320 ₽</span>
+              <span class="qty">
+                <button type="button" data-step="-1" aria-label="Убрать один">−</button>
+                <span class="val">0</span>
+                <button type="button" data-step="1" aria-label="Добавить один">+</button>
+              </span>
+            </div>
+            <div class="menu-row" data-item="Ягодный закат" data-price="340">
+              <span class="name">🍓 Ягодный закат</span>
+              <span class="price">340 ₽</span>
+              <span class="qty">
+                <button type="button" data-step="-1" aria-label="Убрать один">−</button>
+                <span class="val">0</span>
+                <button type="button" data-step="1" aria-label="Добавить один">+</button>
+              </span>
+            </div>
+            <div class="menu-row" data-item="Имбирный дерзкий" data-price="350">
+              <span class="name">🫚 Имбирный дерзкий</span>
+              <span class="price">350 ₽</span>
+              <span class="qty">
+                <button type="button" data-step="-1" aria-label="Убрать один">−</button>
+                <span class="val">0</span>
+                <button type="button" data-step="1" aria-label="Добавить один">+</button>
+              </span>
+            </div>
+          </div>
+
+          <div class="field" id="fName">
+            <label for="inName">Имя</label>
+            <input id="inName" name="name" type="text" autocomplete="name" placeholder="Как к вам обращаться?">
+            <span class="err">Напишите имя — хотя бы две буквы.</span>
+          </div>
+
+          <div class="field" id="fPhone">
+            <label for="inPhone">Телефон</label>
+            <input id="inPhone" name="phone" type="tel" autocomplete="tel" placeholder="+7 (999) 123-45-67">
+            <span class="err">Нужен номер минимум из 10 цифр.</span>
+          </div>
+
+          <div class="field" id="fAddr">
+            <label for="inAddr">Адрес доставки</label>
+            <input id="inAddr" name="address" type="text" autocomplete="street-address" placeholder="Улица, дом, квартира">
+            <span class="err">Курьер не найдёт — уточните адрес.</span>
+          </div>
+
+          <div class="field">
+            <label for="inNote">Комментарий (необязательно)</label>
+            <textarea id="inNote" name="note" placeholder="Побольше льда, позвонить за 5 минут…"></textarea>
+          </div>
+
+          <div class="pay">
+            <label><input type="radio" name="pay" value="Картой курьеру" checked> Картой</label>
+            <label><input type="radio" name="pay" value="Наличными"> Наличными</label>
+          </div>
+
+          <div class="totals">
+            <div><span>Напитки</span><span id="sumGoods">0 ₽</span></div>
+            <div><span id="deliveryLabel">Доставка</span><span id="sumDelivery">0 ₽</span></div>
+            <div class="grand"><span>Итого</span><span id="sumTotal">0 ₽</span></div>
+          </div>
+
+          <button class="btn" id="orderSubmit" type="submit" disabled>Оформить заказ</button>
+        </form>
+      </div>
+
+      <div id="doneStep" class="done" hidden>
+        <div class="big">🍋</div>
+        <h2>Заказ принят!</h2>
+        <p id="doneText"></p>
+        <div class="num" id="doneNum"></div>
+        <p>Курьер уже крутит педали. Спасибо, что выбрали самый жёлтый лимонад в городе.</p>
+        <button class="btn" id="doneClose" type="button">Отлично</button>
+      </div>
+
+    </div>
   </div>
 
 <script>
@@ -764,8 +1021,19 @@
   }
 
   /* ---------- мышь ---------- */
+
+  // клик по кнопке заказа: короткое нажатие без протяжки, даже если кнопка упала
+  const tap = { el: null, x: 0, y: 0, t: 0 };
+
+  function closestSel(target, sel) {
+    return target && target.closest ? target.closest(sel) : null;
+  }
+
   window.addEventListener('pointerdown', function (e) {
-    if (e.target && e.target.closest && e.target.closest('.hud')) return;
+    if (isOrderOpen()) return;
+    tap.el = closestSel(e.target, '[data-order]');
+    tap.x = e.clientX; tap.y = e.clientY; tap.t = performance.now();
+    if (closestSel(e.target, '.hud')) return;
     const b = bodyAtPoint(e.clientX, e.clientY);
     if (!b) return;
     const c = Math.cos(b.angle), s = Math.sin(b.angle);
@@ -780,8 +1048,17 @@
     if (grab.body) grab.target = { x: e.clientX, y: e.clientY };
   });
 
-  window.addEventListener('pointerup', function () { grab.body = null; });
-  window.addEventListener('pointercancel', function () { grab.body = null; });
+  window.addEventListener('pointerup', function (e) {
+    grab.body = null;
+    const el = tap.el;
+    tap.el = null;
+    if (!el || closestSel(e.target, '[data-order]') !== el) return;
+    if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8) return;
+    if (performance.now() - tap.t > 600) return;
+    openOrder(el);
+  });
+
+  window.addEventListener('pointercancel', function () { grab.body = null; tap.el = null; });
 
   /* ---------- цикл ---------- */
   let acc = 0, last = performance.now();
@@ -796,16 +1073,158 @@
     requestAnimationFrame(frame);
   }
 
+  /* ============================================================
+     Оформление заказа
+     ============================================================ */
+
+  const DELIVERY = 149;         // стоимость доставки, ₽
+  const FREE_FROM = 900;        // сумма бесплатной доставки, ₽
+
+  const overlay = document.getElementById('orderOverlay');
+  let lastTrigger = null;
+
+  function isOrderOpen() { return overlay.classList.contains('open'); }
+
+  function money(v) { return v.toLocaleString('ru-RU') + ' ₽'; }
+
+  function cart() {
+    const rows = [];
+    let goods = 0;
+    document.querySelectorAll('#orderMenu .menu-row').forEach(function (row) {
+      const qty = +row.querySelector('.val').textContent;
+      if (!qty) return;
+      const price = +row.dataset.price;
+      goods += price * qty;
+      rows.push({ name: row.dataset.item, qty: qty, sum: price * qty });
+    });
+    const delivery = !goods || goods >= FREE_FROM ? 0 : DELIVERY;
+    return { rows: rows, goods: goods, delivery: delivery, total: goods + delivery };
+  }
+
+  function refreshTotals() {
+    const c = cart();
+    document.getElementById('sumGoods').textContent = money(c.goods);
+    document.getElementById('sumDelivery').textContent = c.goods && !c.delivery ? 'бесплатно' : money(c.delivery);
+    document.getElementById('deliveryLabel').textContent =
+      c.goods && !c.delivery ? 'Доставка (от ' + FREE_FROM + ' ₽)' : 'Доставка';
+    document.getElementById('sumTotal').textContent = money(c.total);
+    document.getElementById('orderSubmit').disabled = !c.rows.length;
+  }
+
+  document.getElementById('orderMenu').addEventListener('click', function (e) {
+    const btn = closestSel(e.target, 'button[data-step]');
+    if (!btn) return;
+    const val = btn.parentNode.querySelector('.val');
+    val.textContent = Math.max(0, Math.min(20, +val.textContent + +btn.dataset.step));
+    refreshTotals();
+  });
+
+  const FIELDS = [
+    { box: 'fName', input: 'inName', ok: function (v) { return v.trim().length >= 2; } },
+    { box: 'fPhone', input: 'inPhone', ok: function (v) { return v.replace(/\D/g, '').length >= 10; } },
+    { box: 'fAddr', input: 'inAddr', ok: function (v) { return v.trim().length >= 5; } }
+  ];
+
+  function checkField(f, force) {
+    const box = document.getElementById(f.box);
+    // без force молчим, пока пользователь не попробовал отправить форму
+    if (!force && !box.classList.contains('invalid')) return true;
+    const ok = f.ok(document.getElementById(f.input).value);
+    box.classList.toggle('invalid', !ok);
+    return ok;
+  }
+
+  function validate() {
+    // map, а не every — чтобы подсветить сразу все ошибки, а не первую
+    return FIELDS.map(function (f) { return checkField(f, true); }).every(Boolean);
+  }
+
+  FIELDS.forEach(function (f) {
+    document.getElementById(f.input).addEventListener('input', function () { checkField(f, false); });
+  });
+
+  function openOrder(trigger) {
+    if (isOrderOpen()) return;
+    lastTrigger = trigger || null;
+    grab.body = null;
+    overlay.classList.add('open');
+    overlay.scrollTop = 0;
+    document.getElementById('orderModal').scrollTop = 0;
+    // preventScroll — иначе окно проматывается к полю и прячет заголовок
+    document.getElementById('inName').focus({ preventScroll: true });
+  }
+
+  function closeOrder() {
+    if (!isOrderOpen()) return;
+    overlay.classList.remove('open');
+    if (lastTrigger && document.body.contains(lastTrigger)) lastTrigger.focus();
+    lastTrigger = null;
+  }
+
+  function resetOrder() {
+    document.getElementById('orderForm').reset();
+    document.querySelectorAll('#orderMenu .val').forEach(function (v) { v.textContent = '0'; });
+    FIELDS.forEach(function (f) {
+      document.getElementById(f.box).classList.remove('invalid');
+    });
+    document.getElementById('orderStep').hidden = false;
+    document.getElementById('doneStep').hidden = true;
+    refreshTotals();
+  }
+
+  document.getElementById('orderForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const c = cart();
+    if (!c.rows.length || !validate()) {
+      const bad = overlay.querySelector('.field.invalid input');
+      if (bad) bad.focus();
+      return;
+    }
+    const pay = overlay.querySelector('input[name="pay"]:checked').value;
+    const list = c.rows.map(function (r) { return r.name + ' × ' + r.qty; }).join(', ');
+    document.getElementById('doneText').textContent =
+      list + ' — на ' + money(c.total) + ', ' + pay.toLowerCase() + '. ' +
+      'Позвоним на ' + document.getElementById('inPhone').value.trim() + ' для подтверждения.';
+    document.getElementById('doneNum').textContent =
+      'Заказ № ' + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('orderStep').hidden = true;
+    document.getElementById('doneStep').hidden = false;
+    document.getElementById('doneClose').focus();
+  });
+
+  document.getElementById('orderClose').addEventListener('click', closeOrder);
+  document.getElementById('doneClose').addEventListener('click', function () {
+    closeOrder();
+    resetOrder();
+  });
+
+  // клик по затемнению закрывает окно, клик внутри — нет
+  overlay.addEventListener('pointerdown', function (e) {
+    if (e.target === overlay) closeOrder();
+  });
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOrderOpen()) closeOrder();
+  });
+
   /* ---------- инициализация ---------- */
   function init() {
     document.querySelectorAll('.fall').forEach(function (el) {
       const item = { el: el, state: 'idle', body: null, obstacle: null };
       items.push(item);
+      // кнопки заказа не падают от наведения — иначе по ним не кликнуть;
+      // сбить их прилетевшим элементом по-прежнему можно
+      if (el.hasAttribute('data-order')) return;
       el.addEventListener('mouseenter', function () { drop(item); });
     });
     buildBounds();
     items.forEach(makeObstacle);
     document.getElementById('resetBtn').addEventListener('click', resetAll);
+    document.querySelectorAll('[data-order]').forEach(function (el) {
+      // клавиатура: Enter/Пробел; мышь обрабатывается в pointerup
+      el.addEventListener('click', function () { openOrder(el); });
+    });
+    refreshTotals();
     requestAnimationFrame(function (t) { last = t; requestAnimationFrame(frame); });
   }
 
