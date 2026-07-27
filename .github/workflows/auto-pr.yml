@@ -1,0 +1,57 @@
+name: Auto PR
+
+# Срабатывает на пуш в ветки вида claude/new-session-xxxx
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  BASE_BRANCH: main
+  AUTO_MERGE: 'true'   # поставь 'false', если хочешь только создавать PR, а мёржить руками
+
+jobs:
+  auto-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Создать PR, если его ещё нет
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING уже открыт."
+          else
+            gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH" \
+              --title "$(git log -1 --pretty=%s)" \
+              --body "Автоматический PR из ветки \`$BRANCH\`."
+          fi
+
+      - name: Смёржить PR
+        if: env.AUTO_MERGE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          # GitHub считает mergeable не мгновенно — даём несколько попыток
+          for i in 1 2 3 4 5; do
+            if gh pr merge "$BRANCH" --squash --delete-branch; then
+              echo "Смёржено."
+              exit 0
+            fi
+            echo "Попытка $i не удалась, жду 10 секунд..."
+            sleep 10
+          done
+          echo "Не удалось смёржить автоматически — скорее всего конфликт. Открой PR и разреши вручную."
+          exit 1
