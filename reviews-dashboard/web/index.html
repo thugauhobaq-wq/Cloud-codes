@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Отзывы — дашборд</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand__mark">★</span>
+    <div>
+      <h1>Отзывы о компании</h1>
+      <p class="brand__sub" id="periodLabel">Яндекс.Карты · 2ГИС · Wildberries · Ozon</p>
+    </div>
+  </div>
+  <div class="topbar__actions">
+    <button class="btn btn--ghost" id="themeToggle" type="button" title="Светлая / тёмная тема">◐</button>
+    <button class="btn btn--primary" id="openCollect" type="button">Собрать отзывы</button>
+  </div>
+</header>
+
+<section class="filters" aria-label="Фильтры">
+  <label class="field">
+    <span>Компания</span>
+    <select id="filterCompany"><option value="">Все компании</option></select>
+  </label>
+  <label class="field">
+    <span>Источник</span>
+    <select id="filterSource">
+      <option value="">Все источники</option>
+      <option value="yandex">Яндекс.Карты</option>
+      <option value="2gis">2ГИС</option>
+      <option value="wildberries">Wildberries</option>
+      <option value="ozon">Ozon</option>
+      <option value="file">Импорт из файла</option>
+      <option value="demo">Демо</option>
+    </select>
+  </label>
+  <label class="field">
+    <span>Тональность</span>
+    <select id="filterSentiment">
+      <option value="">Любая</option>
+      <option value="positive">Позитив</option>
+      <option value="neutral">Нейтрально</option>
+      <option value="negative">Негатив</option>
+    </select>
+  </label>
+  <label class="field">
+    <span>Период</span>
+    <select id="filterPeriod">
+      <option value="">Всё время</option>
+      <option value="30">30 дней</option>
+      <option value="90">90 дней</option>
+      <option value="180">Полгода</option>
+      <option value="365">Год</option>
+    </select>
+  </label>
+  <label class="field field--grow">
+    <span>Поиск по тексту</span>
+    <input id="filterQuery" type="search" placeholder="например: доставка">
+  </label>
+  <button class="btn btn--ghost" id="resetFilters" type="button">Сбросить</button>
+</section>
+
+<main id="dashboard" class="viz-root">
+
+  <section class="kpis" aria-label="Ключевые показатели">
+    <article class="kpi">
+      <p class="kpi__label">Всего отзывов</p>
+      <p class="kpi__value" id="kpiTotal">—</p>
+      <p class="kpi__hint" id="kpiPeriod">за всё время</p>
+    </article>
+    <article class="kpi">
+      <p class="kpi__label">Средняя оценка</p>
+      <p class="kpi__value" id="kpiRating">—</p>
+      <p class="kpi__hint" id="kpiRatingStars"></p>
+    </article>
+    <article class="kpi">
+      <p class="kpi__label">Индекс тональности</p>
+      <p class="kpi__value" id="kpiScore">—</p>
+      <p class="kpi__hint">от −1 (всё плохо) до +1</p>
+    </article>
+    <article class="kpi">
+      <p class="kpi__label">Доля негатива</p>
+      <p class="kpi__value" id="kpiNegative">—</p>
+      <p class="kpi__hint"><span class="badge" id="kpiTrend">нет данных</span></p>
+    </article>
+    <article class="kpi">
+      <p class="kpi__label">Компания отвечает</p>
+      <p class="kpi__value" id="kpiReply">—</p>
+      <p class="kpi__hint" id="kpiReplyHint">ответов на отзывы</p>
+    </article>
+  </section>
+
+  <div class="charts-head">
+    <h2>Аналитика</h2>
+    <button class="btn btn--ghost btn--sm" id="toggleTable" type="button" aria-pressed="false">
+      Показать таблицей
+    </button>
+  </div>
+
+  <section class="grid" id="chartsGrid">
+    <article class="card">
+      <h3>Тональность отзывов</h3>
+      <p class="card__sub">Доли позитивных, нейтральных и негативных</p>
+      <div class="chart" id="chartSentiment"></div>
+    </article>
+
+    <article class="card">
+      <h3>Распределение оценок</h3>
+      <p class="card__sub">Сколько отзывов на каждую звезду</p>
+      <div class="chart" id="chartRatings"></div>
+    </article>
+
+    <article class="card card--wide">
+      <h3>Динамика по месяцам</h3>
+      <p class="card__sub">Количество отзывов и их состав</p>
+      <div class="chart" id="chartTimeline"></div>
+    </article>
+
+    <article class="card card--wide">
+      <h3>Индекс тональности во времени</h3>
+      <p class="card__sub">Среднее по месяцу, ноль — нейтральный уровень</p>
+      <div class="chart" id="chartScoreLine"></div>
+    </article>
+
+    <article class="card">
+      <h3>Источники</h3>
+      <p class="card__sub">Откуда пришли отзывы и как они распределены</p>
+      <div class="chart" id="chartSources"></div>
+    </article>
+
+    <article class="card">
+      <h3>О чём пишут</h3>
+      <p class="card__sub">Аспекты: влево — негатив, вправо — позитив</p>
+      <div class="chart" id="chartAspects"></div>
+    </article>
+
+    <article class="card card--full">
+      <h3>Частые слова</h3>
+      <p class="card__sub">Лексика позитивных и негативных отзывов</p>
+      <div class="words" id="wordLists"></div>
+    </article>
+  </section>
+
+  <section class="table-view" id="tableView" hidden>
+    <h3>Те же данные таблицей</h3>
+    <div id="tableViewBody"></div>
+  </section>
+
+  <section class="highlights" id="highlights" aria-label="Показательные отзывы"></section>
+
+  <section class="reviews">
+    <div class="charts-head">
+      <h2>Отзывы <span class="muted" id="reviewsCount"></span></h2>
+    </div>
+    <div id="reviewsList" class="reviews__list"></div>
+    <div class="reviews__more">
+      <button class="btn btn--ghost" id="loadMore" type="button" hidden>Показать ещё</button>
+    </div>
+  </section>
+
+  <p class="empty" id="emptyState" hidden>
+    Данных пока нет. Нажмите «Собрать отзывы» и запустите демо-набор или укажите
+    ссылку на организацию.
+  </p>
+</main>
+
+<div class="modal" id="collectModal" hidden>
+  <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="collectTitle">
+    <div class="modal__head">
+      <h2 id="collectTitle">Собрать отзывы</h2>
+      <button class="btn btn--ghost btn--sm" id="closeCollect" type="button">✕</button>
+    </div>
+    <form id="collectForm">
+      <label class="field">
+        <span>Источник</span>
+        <select id="collectSource" name="source"></select>
+      </label>
+      <p class="hint" id="collectHint"></p>
+      <label class="field">
+        <span>Ссылка / id / артикул / путь к файлу</span>
+        <input id="collectQuery" name="query" placeholder="https://yandex.ru/maps/org/.../1234567890/">
+      </label>
+      <div class="row">
+        <label class="field">
+          <span>Название компании в базе</span>
+          <input id="collectCompany" name="company" placeholder="необязательно">
+        </label>
+        <label class="field field--narrow">
+          <span>Сколько отзывов</span>
+          <input id="collectLimit" name="limit" type="number" value="100" min="1" max="1000">
+        </label>
+      </div>
+      <label class="field" id="apiKeyField" hidden>
+        <span>Ключ API (2ГИС)</span>
+        <input id="collectKey" name="api_key" placeholder="можно задать переменной GIS2_API_KEY">
+      </label>
+      <label class="field">
+        <span>Или разобрать сохранённый файл площадки</span>
+        <input id="collectFile" name="from_file" placeholder="путь к сохранённому HTML/JSON, необязательно">
+      </label>
+      <p class="modal__status" id="collectStatus"></p>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" type="button" id="cancelCollect">Отмена</button>
+        <button class="btn btn--primary" type="submit" id="collectSubmit">Запустить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
