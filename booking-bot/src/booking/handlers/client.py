@@ -229,7 +229,10 @@ def build_client_router(
             # если что-то сдвинется.
             await state.set_state(BookFlow.phone)
             await _edit(callback, "Почти готово. Оставьте телефон для связи:", None)
-            await callback.message.answer(
+            # Через bot, а не через callback.message: сообщение с кнопкой может
+            # быть старше 48 часов, и Telegram отдаёт его недоступным.
+            await callback.bot.send_message(
+                callback.from_user.id,
                 "Нажмите кнопку ниже или пришлите номер сообщением.",
                 reply_markup=request_phone(),
             )
@@ -349,8 +352,10 @@ def build_client_router(
         if not booking_id.isdigit():
             await callback.answer()
             return
-        await callback.message.answer(
-            "Точно отменить запись?", reply_markup=cancel_confirm_keyboard(int(booking_id))
+        await callback.bot.send_message(
+            callback.from_user.id,
+            "Точно отменить запись?",
+            reply_markup=cancel_confirm_keyboard(int(booking_id)),
         )
         await callback.answer()
 

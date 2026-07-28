@@ -50,7 +50,7 @@ def build_client_router(
             # лишнего шага «а теперь напишите слово».
             magnet = await storage.magnet_by_code(code)
             if magnet is not None and magnet.ready:
-                await _hand_over(message, magnet, source)
+                await _hand_over(message.bot, message.from_user.id, magnet, source)
                 return
 
         magnets = await storage.list_magnets()
@@ -107,7 +107,7 @@ def build_client_router(
             return
 
         lead = await storage.get_lead(message.from_user.id)
-        await _hand_over(message, magnet, lead.source if lead else "")
+        await _hand_over(message.bot, message.from_user.id, magnet, lead.source if lead else "")
 
     @router.callback_query(F.data.startswith(f"{CB_MAGNET}:"))
     async def pick_magnet(callback: CallbackQuery) -> None:
@@ -120,7 +120,7 @@ def build_client_router(
         lead = await storage.get_lead(callback.from_user.id)
         await callback.answer()
         await _hand_over(
-            callback.message, magnet, lead.source if lead else "", user=callback.from_user
+            callback.bot, callback.from_user.id, magnet, lead.source if lead else ""
         )
 
     # ── проверка подписки ─────────────────────────────────────────────────
@@ -152,22 +152,27 @@ def build_client_router(
 
     # ── общее ─────────────────────────────────────────────────────────────
 
-    async def _hand_over(message: Message, magnet: Magnet, source: str, user=None) -> None:
-        """Выдать материал или попросить подписаться на канал."""
-        user = user or message.from_user
+    async def _hand_over(bot: Bot, user_id: int, magnet: Magnet, source: str) -> None:
+        """Выдать материал или попросить подписаться на канал.
+
+        Работаем через `bot` и id пользователя, а не через сообщение: кнопку
+        могли нажать под постом, которому больше 48 часов, — Telegram отдаёт
+        такое сообщение недоступным, и ответить на него нельзя.
+        """
         if settings.check_subscription and not await is_subscribed(
-            message.bot, settings.required_channel, user.id
+            bot, settings.required_channel, user_id
         ):
-            await message.answer(
+            await bot.send_message(
+                user_id,
                 subscription_gate(settings, magnet),
                 reply_markup=subscription_keyboard(settings, magnet),
             )
             return
 
-        delivered = await deliverer.deliver(user.id, magnet, source)
+        delivered = await deliverer.deliver(user_id, magnet, source)
         if not delivered:
-            await message.answer(
-                "Не получилось отправить материал. Напишите ещё раз чуть позже."
+            await bot.send_message(
+                user_id, "Не получилось отправить материал. Напишите ещё раз чуть позже."
             )
 
     return router

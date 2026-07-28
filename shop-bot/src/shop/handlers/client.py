@@ -208,8 +208,8 @@ def build_client_router(storage: Storage, notifier: Notifier, settings: Settings
             # Текстовое сообщение нельзя превратить в фото — старое убираем и
             # шлём карточку с картинкой отдельным сообщением.
             await _drop(callback)
-            await callback.message.answer_photo(
-                product.photo_id, caption=text, reply_markup=keyboard
+            await callback.bot.send_photo(
+                callback.from_user.id, product.photo_id, caption=text, reply_markup=keyboard
             )
         else:
             await _replace(callback, text, keyboard)
@@ -301,7 +301,8 @@ def build_client_router(storage: Storage, notifier: Notifier, settings: Settings
 
         suggestion = customer.name if customer and customer.name else callback.from_user.full_name
         await _drop(callback)
-        await callback.message.answer(
+        await callback.bot.send_message(
+            callback.from_user.id,
             f"Как к вам обращаться?\n\nМожно отправить «{escape(suggestion)}» кнопкой ниже.",
             reply_markup=_name_keyboard(suggestion),
         )

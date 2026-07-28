@@ -343,7 +343,7 @@ def build_admin_router(
         record = await broadcaster.run(
             text, magnet_code=data.get("broadcast_code", ""), on_progress=report
         )
-        await callback.message.answer(broadcast_report(record))
+        await callback.bot.send_message(callback.from_user.id, broadcast_report(record))
 
     @router.message(Command("broadcasts"))
     async def cmd_broadcasts(message: Message) -> None:

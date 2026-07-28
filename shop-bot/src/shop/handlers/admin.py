@@ -142,7 +142,9 @@ def build_admin_router(storage: Storage, notifier: Notifier, settings: Settings)
         if status == STATUS_CANCELLED:
             # Отменённый заказ возвращает товары на склад — стоит сказать об этом,
             # иначе продавец решит, что остатки «слиплись».
-            await callback.message.answer("Товары из заказа вернулись в наличие.")
+            await callback.bot.send_message(
+                callback.from_user.id, "Товары из заказа вернулись в наличие."
+            )
 
     @router.message(Command("export"))
     async def cmd_export(message: Message) -> None:
