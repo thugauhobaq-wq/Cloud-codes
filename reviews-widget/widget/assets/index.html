@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Виджет отзывов — одна строчка кода</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --fg: #151922; --muted: #6b7280;
+    --border: #e4e7ee; --accent: #2f6df6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1015; --card: #171a21; --fg: #e8eaf0; --muted: #98a1b3; --border: #272b36; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 56px 20px 80px; }
+  h1 { font-size: 38px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.02em; }
+  h2 { font-size: 22px; margin: 48px 0 14px; letter-spacing: -0.01em; }
+  p.lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 620px; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px;
+  }
+  pre {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; margin: 0 0 12px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-block; font-size: 14px; font-weight: 600; text-decoration: none;
+    padding: 10px 18px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .cards div {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px;
+  }
+  .cards b { display: block; margin-bottom: 4px; }
+  .cards p { margin: 0; color: var(--muted); font-size: 14px; }
+  .stage {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 26px;
+  }
+  .note {
+    border-left: 3px solid var(--accent); padding: 4px 0 4px 14px;
+    color: var(--muted); font-size: 15px;
+  }
+  footer { color: var(--muted); font-size: 14px; margin-top: 56px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Отзывы на сайте — за одну строчку</h1>
+  <p class="lead">Карусель отзывов, форма сбора и кабинет модерации.
+    Клиенту нужно вставить один тег — дальше всё меняется из админки,
+    трогать код сайта больше не придётся.</p>
+
+  <pre id="embed">&lt;script src="__RW_BASE__/w/__RW_SITE_KEY__.js" async&gt;&lt;/script&gt;</pre>
+  <div class="row">
+    <a class="btn primary" href="/admin">Кабинет модерации</a>
+    <a class="btn" id="formLink" href="/f/__RW_SITE_KEY__">Форма отзыва</a>
+  </div>
+
+  <h2>Как это выглядит на странице</h2>
+  <div class="stage">
+    <!-- Ниже — та самая строчка, ничего больше на этой странице для неё не нужно. -->
+    <script src="/w/__RW_SITE_KEY__.js" async></script>
+  </div>
+
+  <h2>Что внутри</h2>
+  <div class="cards">
+    <div><b>Не ломает вёрстку</b><p>Виджет живёт в Shadow DOM: стили сайта на него
+      не влияют, а его стили не влияют на сайт.</p></div>
+    <div><b>Собирает отзывы сам</b><p>Форма на сайте, отдельная страница по ссылке
+      и Telegram-бот — всё складывается в одну базу.</p></div>
+    <div><b>Модерация до публикации</b><p>Отзыв виден только после проверки.
+      Одобрять можно в кабинете или прямо кнопкой в Telegram.</p></div>
+    <div><b>Антиспам из коробки</b><p>Ловушка для ботов, лимит по IP и фильтр
+      рекламных текстов — до попадания в базу.</p></div>
+    <div><b>Ответы компании</b><p>Под отзывом можно опубликовать ответ —
+      это работает лучше, чем удалять негатив.</p></div>
+    <div><b>Ноль зависимостей</b><p>Python из коробки и чистый JS. Никакой сборки,
+      npm и внешних сервисов.</p></div>
+  </div>
+
+  <h2>Настройка</h2>
+  <p class="note">Тема, цвет, автопрокрутка, число отзывов и фильтр по оценке
+    меняются в кабинете и применяются сразу — строчка на сайте остаётся прежней.</p>
+
+  <footer>
+    Сервер: <code>python -m widget serve</code> ·
+    Новый клиент: <code>python -m widget site add --name «Компания»</code>
+  </footer>
+</div>
+
+<script>
+  // Если сайтов ещё нет, ключ пустой — подсказываем, с чего начать.
+  if (document.getElementById("embed").textContent.indexOf("/w/.js") >= 0) {
+    document.getElementById("embed").textContent =
+      "python -m widget site add --name «Моя компания» --demo";
+    document.querySelector(".stage").textContent =
+      "Сначала заведите сайт командой выше — здесь появится живой виджет.";
+    document.getElementById("formLink").remove();
+  }
+</script>
+</body>
+</html>
