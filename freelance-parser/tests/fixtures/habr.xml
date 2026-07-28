@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Habr Freelance — задачи</title>
+  <entry>
+    <id>https://freelance.habr.com/tasks/812345</id>
+    <title>Доработать Django-приложение</title>
+    <link rel="alternate" href="https://freelance.habr.com/tasks/812345"/>
+    <summary>&lt;p&gt;Нужно добавить админку и выгрузку в CSV. Оплата 40 000 руб.&lt;/p&gt;</summary>
+    <published>2026-07-28T01:10:00Z</published>
+    <category term="Веб-разработка"/>
+  </entry>
+  <entry>
+    <id>https://freelance.habr.com/tasks/812346</id>
+    <title>Настроить CI/CD в GitLab</title>
+    <link rel="alternate" href="https://freelance.habr.com/tasks/812346"/>
+    <summary>Пайплайн для монорепозитория, деплой в Kubernetes.</summary>
+    <published>2026-07-28T01:20:00Z</published>
+    <category term="DevOps"/>
+  </entry>
+</feed>
