@@ -1,0 +1,43 @@
+name: freelance-parser CI
+
+on:
+  push:
+    paths:
+      - 'freelance-parser/**'
+      - '.github/workflows/freelance-parser-ci.yml'
+  pull_request:
+    paths:
+      - 'freelance-parser/**'
+      - '.github/workflows/freelance-parser-ci.yml'
+
+defaults:
+  run:
+    working-directory: freelance-parser
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: freelance-parser/pyproject.toml
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check src tests
+
+      - name: Тесты
+        # Тесты работают на сохранённых фикстурах и замоканном HTTP, поэтому
+        # не зависят от доступности бирж с раннеров GitHub.
+        run: pytest -q
+
+      - name: Прогон на фикстурах без сети
+        run: python -m fparser dryrun --offline
+        env:
+          DB_PATH: /tmp/ci-check.db

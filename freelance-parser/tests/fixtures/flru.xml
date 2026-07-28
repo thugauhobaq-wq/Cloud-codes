@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>FL.ru — все проекты</title>
+    <link>https://www.fl.ru/projects/</link>
+    <item>
+      <title>Вёрстка лендинга по макету (5000 руб.)</title>
+      <link>https://www.fl.ru/projects/5461234/verstka-lendinga-po-maketu.html</link>
+      <description>&lt;p&gt;Нужно сверстать одностраничник по готовому макету в Figma.&lt;br/&gt;Адаптив обязателен.&lt;/p&gt;</description>
+      <pubDate>Tue, 28 Jul 2026 04:00:00 +0300</pubDate>
+      <category>Вёрстка сайтов</category>
+      <guid isPermaLink="false">fl-5461234-1785000000</guid>
+    </item>
+    <item>
+      <title>Telegram-бот на Python (от 15000 до 30 000 руб.)</title>
+      <link>https://www.fl.ru/projects/5461235/telegram-bot-na-python.html</link>
+      <description>Нужен бот-парсер объявлений. Стек: Python, aiogram &amp; PostgreSQL.</description>
+      <pubDate>Tue, 28 Jul 2026 04:05:00 +0300</pubDate>
+      <category>Разработка ботов</category>
+      <guid isPermaLink="false">fl-5461235-1785000300</guid>
+    </item>
+    <item>
+      <title>Написать 10 статей для блога</title>
+      <link>https://www.fl.ru/projects/5461236/napisat-statii.html</link>
+      <description>Тематика — строительство. Бюджет обсуждается.</description>
+      <pubDate>Tue, 28 Jul 2026 04:07:00 +0300</pubDate>
+      <category>Тексты и переводы</category>
+      <guid isPermaLink="false">fl-5461236-1785000420</guid>
+    </item>
+  </channel>
+</rss>

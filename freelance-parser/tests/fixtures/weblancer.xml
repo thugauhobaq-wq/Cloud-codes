@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Weblancer — проекты</title>
+    <item>
+      <title>Интернет-магазин на OpenCart</title>
+      <link>https://www.weblancer.net/projects/sites-3/internet-magazin-na-opencart-1234567/</link>
+      <description>Требуется доработка шаблона и интеграция с 1С. Бюджет 60000 руб.</description>
+      <pubDate>Mon, 27 Jul 2026 22:30:00 +0300</pubDate>
+      <category>Сайты</category>
+    </item>
+    <item>
+      <title>Баннеры для рекламной кампании</title>
+      <link>https://www.weblancer.net/projects/banners-11/bannery-dlya-reklamy-1234568/</link>
+      <description>Нужно 8 баннеров в разных форматах.</description>
+      <pubDate>Mon, 27 Jul 2026 22:45:00 +0300</pubDate>
+      <category>Дизайн</category>
+    </item>
+  </channel>
+</rss>

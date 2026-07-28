@@ -1,0 +1,19 @@
+services:
+  fparser:
+    build: .
+    container_name: freelance-parser
+    # Сервис должен пережить и падение, и перезагрузку сервера: пропущенные
+    # часы — это пропущенные заказы.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # База с историей и настройками живёт вне контейнера, иначе при каждом
+      # обновлении образа всё начиналось бы с чистого листа.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/fparser.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
