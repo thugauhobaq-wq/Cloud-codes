@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Коммерческое предложение — генератор</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📄</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar__title">
+    <strong>Коммерческое предложение</strong>
+    <span id="fontNote" class="muted"></span>
+  </div>
+  <div class="topbar__actions">
+    <button type="button" id="loadDemo" class="btn btn--ghost">Пример</button>
+    <button type="button" id="saveDraft" class="btn btn--ghost">Сохранить</button>
+    <button type="button" id="preview" class="btn btn--ghost">Предпросмотр</button>
+    <button type="button" id="download" class="btn btn--primary">Скачать PDF</button>
+  </div>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<main class="layout">
+  <form id="form" class="form" autocomplete="off">
+
+    <section class="card">
+      <h2>Предложение</h2>
+      <div class="grid grid--4">
+        <label>Номер<input name="number" value="1"></label>
+        <label>Дата<input type="date" name="issued_at"></label>
+        <label>Действительно, дней<input type="number" name="valid_days" min="0" value="14"></label>
+        <label>Шаблон
+          <select name="template" id="template"></select>
+        </label>
+      </div>
+      <label>Тема<input name="subject" placeholder="Разработка сайта-каталога"></label>
+      <label>Вступление
+        <textarea name="intro" rows="4" placeholder="Спасибо за встречу. Ниже — состав работ, сроки и стоимость…"></textarea>
+      </label>
+    </section>
+
+    <div class="grid grid--2">
+      <section class="card" data-party="sender">
+        <h2>Исполнитель <span class="muted">— это вы</span></h2>
+        <div class="logo-drop" data-logo="sender">
+          <img alt="" hidden>
+          <span class="logo-drop__hint">Перетащите логотип или нажмите<br><span class="muted">PNG или JPEG</span></span>
+          <input type="file" accept="image/png,image/jpeg" hidden>
+          <button type="button" class="logo-drop__clear" title="Убрать логотип" hidden>×</button>
+        </div>
+        <label>Название<input name="sender.name" placeholder="Студия «Тихий Угол»"></label>
+        <div class="grid grid--2">
+          <label>Подписант<input name="sender.person" placeholder="Анна Северова"></label>
+          <label>Должность<input name="sender.position" placeholder="Руководитель проектов"></label>
+          <label>Телефон<input name="sender.phone" placeholder="+7 999 123-45-67"></label>
+          <label>Почта<input name="sender.email" placeholder="hello@studio.ru"></label>
+        </div>
+        <label>Сайт<input name="sender.site" placeholder="studio.ru"></label>
+        <label>Адрес<input name="sender.address"></label>
+        <label>Реквизиты<textarea name="sender.details" rows="2" placeholder="ИП Иванов И. И., ИНН 770000000000"></textarea></label>
+      </section>
+
+      <section class="card card--accent" data-party="client">
+        <h2>Заказчик</h2>
+        <div class="logo-drop logo-drop--client" data-logo="client">
+          <img alt="" hidden>
+          <span class="logo-drop__hint">Логотип клиента<br><span class="muted">попадёт в шапку предложения</span></span>
+          <input type="file" accept="image/png,image/jpeg" hidden>
+          <button type="button" class="logo-drop__clear" title="Убрать логотип" hidden>×</button>
+        </div>
+        <label>Название<input name="client.name" placeholder="ООО «Ромашка»"></label>
+        <div class="grid grid--2">
+          <label>Контакт<input name="client.person" placeholder="Игорь Лапин"></label>
+          <label>Должность<input name="client.position"></label>
+          <label>Телефон<input name="client.phone"></label>
+          <label>Почта<input name="client.email"></label>
+        </div>
+        <label>Адрес<input name="client.address"></label>
+        <label>Реквизиты<textarea name="client.details" rows="2"></textarea></label>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Позиции</h2>
+      <div class="table-wrap">
+        <table class="items">
+          <thead>
+            <tr>
+              <th class="col-drag"></th>
+              <th>Наименование и описание</th>
+              <th class="col-num">Кол-во</th>
+              <th class="col-unit">Ед.</th>
+              <th class="col-num">Цена</th>
+              <th class="col-num">Скидка, %</th>
+              <th class="col-num">Сумма</th>
+              <th class="col-drag"></th>
+            </tr>
+          </thead>
+          <tbody id="items"></tbody>
+        </table>
+      </div>
+      <button type="button" id="addItem" class="btn btn--ghost">+ Добавить позицию</button>
+    </section>
+
+    <section class="card">
+      <h2>Деньги</h2>
+      <div class="grid grid--4">
+        <label>Валюта
+          <select name="currency">
+            <option value="RUB">₽ рубль</option>
+            <option value="USD">$ доллар</option>
+            <option value="EUR">€ евро</option>
+            <option value="KZT">₸ тенге</option>
+            <option value="BYN">Br белорусский рубль</option>
+            <option value="UAH">₴ гривна</option>
+          </select>
+        </label>
+        <label>НДС
+          <select name="vat_mode">
+            <option value="none">Не облагается</option>
+            <option value="included">В том числе</option>
+            <option value="added">Сверху</option>
+          </select>
+        </label>
+        <label>Ставка НДС, %<input type="number" name="vat_rate" min="0" max="100" step="0.5" value="20"></label>
+        <label>Скидка на всё, %<input type="number" name="discount_percent" min="0" max="100" step="0.5" value="0"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Условия</h2>
+      <div class="grid grid--2">
+        <label>Срок выполнения<input name="lead_time" placeholder="6 недель с момента предоплаты"></label>
+        <label>Условия оплаты<input name="payment_terms" placeholder="50% предоплата, 50% по факту"></label>
+      </div>
+      <label>Примечание<textarea name="notes" rows="2" placeholder="Что не входит в стоимость"></textarea></label>
+    </section>
+
+    <section class="card">
+      <h2>Дополнительные блоки</h2>
+      <p class="muted">«Что вы получите», «Как идёт работа», «О нас» — печатаются перед сметой.</p>
+      <div id="sections"></div>
+      <button type="button" id="addSection" class="btn btn--ghost">+ Добавить блок</button>
+    </section>
+
+    <section class="card">
+      <h2>Оформление</h2>
+      <div class="grid grid--2">
+        <label>Акцентный цвет
+          <span class="color-row">
+            <input type="color" name="accent" value="#1f5eff">
+            <span class="swatches" id="swatches"></span>
+          </span>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="show_signature" checked>
+          Печатать блок подписи
+        </label>
+      </div>
+    </section>
+  </form>
+
+  <aside class="side">
+    <div class="summary card">
+      <h2>Итого</h2>
+      <dl id="totals"></dl>
+      <p class="words muted" id="inWords"></p>
+      <button type="button" id="download2" class="btn btn--primary btn--wide">Скачать PDF</button>
+    </div>
+
+    <div class="card">
+      <h2>Черновики</h2>
+      <div class="draft-save">
+        <input id="draftSlug" placeholder="romashka-katalog">
+      </div>
+      <ul id="drafts" class="drafts"></ul>
+    </div>
+
+    <div class="card preview-card">
+      <h2>Предпросмотр</h2>
+      <iframe id="previewFrame" title="Предпросмотр PDF"></iframe>
+    </div>
+  </aside>
+</main>
+
+<template id="itemRow">
+  <tr class="item">
+    <td class="col-drag"><span class="handle" title="Перетащите, чтобы переставить">⠿</span></td>
+    <td>
+      <input class="item-title" data-field="title" placeholder="Дизайн-концепция">
+      <textarea class="item-desc" data-field="description" rows="1" placeholder="Короткое описание — печатается серым под названием"></textarea>
+    </td>
+    <td><input class="num" data-field="quantity" value="1" inputmode="decimal"></td>
+    <td><input class="unit" data-field="unit" value="шт."></td>
+    <td><input class="num" data-field="price" value="0" inputmode="decimal"></td>
+    <td><input class="num" data-field="discount_percent" value="0" inputmode="decimal"></td>
+    <td class="sum" data-role="sum">0,00</td>
+    <td class="col-drag"><button type="button" class="remove" title="Удалить">×</button></td>
+  </tr>
+</template>
+
+<template id="sectionRow">
+  <div class="section-row">
+    <input data-field="title" placeholder="Заголовок блока">
+    <textarea data-field="body" rows="3" placeholder="Текст блока"></textarea>
+    <button type="button" class="remove" title="Удалить">×</button>
+  </div>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>

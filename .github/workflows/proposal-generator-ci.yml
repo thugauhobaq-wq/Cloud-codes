@@ -1,0 +1,44 @@
+name: proposal-generator CI
+
+on:
+  push:
+    paths:
+      - 'proposal-generator/**'
+      - '.github/workflows/proposal-generator-ci.yml'
+  pull_request:
+    paths:
+      - 'proposal-generator/**'
+      - '.github/workflows/proposal-generator-ci.yml'
+
+defaults:
+  run:
+    working-directory: proposal-generator
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Шрифт с кириллицей
+        # Встраивать в PDF нечего, если в системе нет ни одного такого шрифта.
+        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
+      - name: Линтер
+        run: ruff check .
+
+      - name: Тесты
+        run: pytest -q
+
+      - name: Собрать пример
+        run: |
+          python -m proposals demo --out /tmp/demo.pdf
+          python -m proposals render samples/demo.proposal.json --out /tmp/sample.pdf
+          head -c 8 /tmp/sample.pdf | grep -q '%PDF' && echo "PDF на месте"
