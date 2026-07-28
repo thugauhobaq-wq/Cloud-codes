@@ -1,0 +1,46 @@
+name: shop-bot CI
+
+on:
+  push:
+    paths:
+      - 'shop-bot/**'
+      - '.github/workflows/shop-bot-ci.yml'
+  pull_request:
+    paths:
+      - 'shop-bot/**'
+      - '.github/workflows/shop-bot-ci.yml'
+
+defaults:
+  run:
+    working-directory: shop-bot
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: shop-bot/pyproject.toml
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check src tests
+
+      - name: Тесты
+        # Ни сети, ни Telegram: всё работает на временной базе SQLite
+        # и подставных отправителях.
+        run: pytest -q
+
+      - name: Прогон офлайн-команд
+        run: |
+          python -m shop seed
+          python -m shop catalog
+        env:
+          DB_PATH: /tmp/ci-shop.db
+          BOT_USERNAME: ci_bot
