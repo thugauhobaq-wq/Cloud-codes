@@ -23,7 +23,12 @@ MAX_AUTHOR = 60
 MAX_CONTACT = 120
 MAX_REPLY = 1000
 
-SOURCES = ("form", "telegram", "import", "demo")
+#: Откуда пришёл отзыв. Площадки в этом списке — импорт из соседнего проекта
+#: `reviews-dashboard`, который умеет их собирать.
+SOURCES = (
+    "form", "telegram", "import", "demo",
+    "yandex", "2gis", "wildberries", "ozon", "file",
+)
 STATUSES = ("pending", "published", "rejected")
 
 #: Настройки внешнего вида виджета. Хранятся у сайта, отдаются в API и

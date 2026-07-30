@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'reviews-widget/**'
+      - 'reviews-dashboard/**'
       - '.github/workflows/reviews-widget-ci.yml'
   pull_request:
     paths:
       - 'reviews-widget/**'
+      - 'reviews-dashboard/**'
       - '.github/workflows/reviews-widget-ci.yml'
 
 defaults:
@@ -38,3 +40,17 @@ jobs:
           curl -sf "http://127.0.0.1:8099/w/$KEY.js" | grep -q attachShadow
           curl -sf "http://127.0.0.1:8099/api/v1/widget?site=$KEY" | grep -q '"reviews"'
           curl -sf "http://127.0.0.1:8099/f/$KEY" | grep -q "Отзыв"
+
+      - name: Импорт отзывов с площадок из reviews-dashboard
+        # Дашборд лежит в этом же репозитории и умеет набивать базу офлайн,
+        # так что связку двух проектов можно проверить без сети.
+        working-directory: .
+        run: |
+          cd reviews-dashboard
+          python -m reviews collect --source demo --query "CI Кофейня" --limit 40
+          cd ../reviews-widget
+          python -m widget --db /tmp/ci.db site add --name "CI площадки"
+          KEY=$(python -m widget --db /tmp/ci.db site list | awk '/ключ:/ {print $2}' | tail -1)
+          python -m widget --db /tmp/ci.db pull --site "$KEY" --list | grep -q "Яндекс.Карты"
+          python -m widget --db /tmp/ci.db pull --site "$KEY" --min-rating 4 --publish \
+            | grep -qE "Добавлено: [1-9]"

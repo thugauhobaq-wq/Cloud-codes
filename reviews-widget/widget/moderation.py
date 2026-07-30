@@ -24,11 +24,17 @@ _URL_RE = re.compile(
 _REPEAT_RE = re.compile(r"(.)\1{6,}")
 _PHONE_RE = re.compile(r"(?:\+?\d[\s\-()]?){10,}")
 
-#: Слова, по которым узнаётся типовая реклама в отзывах.
+#: Основы слов, по которым узнаётся типовая реклама в отзывах. Это основы, а
+#: не подстроки: искать «ставк» где угодно нельзя, иначе в каждой «доставке»
+#: найдётся спам. Поэтому сравнение идёт от начала слова.
 SPAM_WORDS = (
     "заработок", "казино", "ставк", "крипто", "биткоин", "инвестиц", "форекс",
     "порно", "виагра", "займ", "кредит без", "seo продвижение", "накрутк",
     "телеграм канал", "промокод", "http://t.me", "whatsapp +",
+)
+
+_SPAM_RE = re.compile(
+    "|".join(r"\b" + re.escape(word) for word in SPAM_WORDS), re.IGNORECASE
 )
 
 MIN_FILL_SECONDS = 3.0   # быстрее человек форму не заполнит
@@ -61,7 +67,7 @@ def check_text(text: str, author: str = "") -> Verdict:
     if _PHONE_RE.search(text):
         flags.append("phone")
         score += 0.25
-    hits = [word for word in SPAM_WORDS if word in lowered]
+    hits = set(match.group(0).lower() for match in _SPAM_RE.finditer(lowered))
     if hits:
         flags.append("spam-words")
         score += 0.4 + 0.2 * min(len(hits) - 1, 2)

@@ -1,5 +1,6 @@
 import io
 import json
+import sqlite3
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -134,6 +135,63 @@ class CliTest(unittest.TestCase):
         data = json.loads(out)
         self.assertGreater(len(data), 5)
         self.assertIn("status", data[0])
+
+    # -------------------------------------------- импорт с площадок (дашборд)
+
+    def make_dashboard_db(self):
+        path = Path(self.tmp.name) / "dashboard.db"
+        conn = sqlite3.connect(path)
+        conn.executescript(
+            """CREATE TABLE reviews (
+                   uid TEXT PRIMARY KEY, source TEXT, company TEXT, text TEXT,
+                   pros TEXT, cons TEXT, reply TEXT, rating REAL, author TEXT, date TEXT);"""
+        )
+        conn.executemany(
+            "INSERT INTO reviews (uid, source, company, text, rating, author, date)"
+            " VALUES (?,?,?,?,?,?,?)",
+            [
+                ("d1", "yandex", "Кофейня", "Отличный кофе и быстрый вайфай тут",
+                 5.0, "Анна", "2026-06-01"),
+                ("d2", "ozon", "Кофейня", "Ждал две недели вместо трёх дней подряд",
+                 2.0, "Сергей", "2026-05-02"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+        return path
+
+    def test_pull_list_shows_companies(self):
+        site = self.make_site()
+        source = self.make_dashboard_db()
+        code, out, _ = self.run_cli("pull", "--site", site.key, "--from", str(source), "--list")
+        self.assertEqual(code, 0)
+        self.assertIn("Кофейня", out)
+        self.assertIn("Яндекс.Карты", out)
+
+    def test_pull_imports_into_moderation(self):
+        site = self.make_site()
+        source = self.make_dashboard_db()
+        code, out, _ = self.run_cli("pull", "--site", site.key, "--from", str(source))
+        self.assertEqual(code, 0)
+        self.assertIn("Добавлено: 2", out)
+        with Storage(self.db) as storage:
+            self.assertEqual(storage.counts(site.key)["pending"], 2)
+
+    def test_pull_min_rating_and_publish(self):
+        site = self.make_site()
+        source = self.make_dashboard_db()
+        self.run_cli("pull", "--site", site.key, "--from", str(source),
+                     "--min-rating", "4", "--publish")
+        with Storage(self.db) as storage:
+            published = storage.published(site.key)
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0].source, "yandex")
+
+    def test_pull_missing_dashboard_db(self):
+        site = self.make_site()
+        code, _, err = self.run_cli("pull", "--site", site.key, "--from", "/нет/reviews.db")
+        self.assertEqual(code, 1)
+        self.assertIn("не найдена", err)
 
     def test_bot_without_token_explains(self):
         self.make_site()

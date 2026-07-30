@@ -32,6 +32,7 @@
       <button class="tab is-on" data-tab="pending">На модерации <b id="cntPending">0</b></button>
       <button class="tab" data-tab="published">Опубликованные <b id="cntPublished">0</b></button>
       <button class="tab" data-tab="rejected">Отклонённые <b id="cntRejected">0</b></button>
+      <button class="tab" data-tab="platforms">С площадок</button>
       <button class="tab" data-tab="setup">Установка</button>
       <button class="tab" data-tab="settings">Настройки</button>
     </nav>
@@ -42,6 +43,51 @@
     <section class="panel" id="listPanel">
       <div class="list" id="list"></div>
       <p class="empty" id="empty" hidden>Здесь пока пусто.</p>
+    </section>
+
+    <section class="panel" id="platformsPanel" hidden>
+      <div id="platformsOff" hidden>
+        <h2>Отзывы с Яндекс.Карт, 2ГИС и маркетплейсов</h2>
+        <p class="muted" id="platformsReason"></p>
+        <p class="muted small" id="platformsHint"></p>
+        <p class="muted small">Отзывы собирает соседний проект
+          <code>reviews-dashboard</code>, а виджет забирает из его базы готовое —
+          только на чтение.</p>
+        <pre class="code">python3 -m widget pull --site КЛЮЧ --from ../reviews-dashboard/data/reviews.db --list</pre>
+      </div>
+
+      <form id="platformsForm" hidden>
+        <h2>Забрать отзывы с площадок</h2>
+        <p class="muted">В базе <code>reviews-dashboard</code> есть готовые отзывы —
+          выберите, что перенести на сайт. Всё попадёт в очередь на модерацию,
+          если не отметить публикацию сразу.</p>
+        <div class="cols">
+          <div>
+            <label class="field"><span>Компания или товар</span>
+              <select name="company" id="platformsCompany"></select></label>
+            <label class="field"><span>Площадка</span>
+              <select name="source" id="platformsSource">
+                <option value="">все площадки</option>
+              </select></label>
+          </div>
+          <div>
+            <label class="field"><span>Брать отзывы не ниже</span>
+              <select name="min_rating">
+                <option value="1">любой оценки</option>
+                <option value="3">3 звёзд</option>
+                <option value="4" selected>4 звёзд</option>
+                <option value="5">только 5</option>
+              </select></label>
+            <label class="field"><span>Сколько максимум</span>
+              <input name="limit" type="number" min="1" max="1000" value="100"></label>
+            <label class="check"><input name="publish" type="checkbox">
+              Опубликовать сразу, минуя модерацию</label>
+          </div>
+        </div>
+        <p class="muted small" id="platformsInfo"></p>
+        <p class="saved" id="pullResult" hidden></p>
+        <button class="btn primary" type="submit" id="pullButton">Забрать отзывы</button>
+      </form>
     </section>
 
     <section class="panel" id="setupPanel" hidden>

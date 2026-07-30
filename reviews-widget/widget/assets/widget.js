@@ -32,7 +32,10 @@
   var NUMBERS = ["limit", "min_rating", "interval", "card_min_width", "radius"];
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня",
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-  var SOURCE_TITLES = { form: "с сайта", telegram: "из Telegram", import: "", demo: "" };
+  var SOURCE_TITLES = {
+    form: "с сайта", telegram: "из Telegram", import: "", demo: "", file: "",
+    yandex: "Яндекс.Карты", "2gis": "2ГИС", wildberries: "Wildberries", ozon: "Ozon"
+  };
   var MAX_PER_VIEW = 3;
 
   /* Конфиг подставляет сервер в /w/<ключ>.js. Для generic-варианта
