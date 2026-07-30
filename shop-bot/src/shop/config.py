@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     )
     min_order: int = Field(default=0, ge=0, description="Минимальная сумма заказа; 0 — без порога")
 
+    # ── Оплата ────────────────────────────────────────────────────────────
+    #: Токен платёжного провайдера от @BotFather (ЮKassa, Сбербанк, Stripe…).
+    #: Пусто — онлайн-оплаты нет, заказы оплачиваются при получении.
+    payment_provider_token: str = Field(default="")
+    payment_provider_name: str = Field(
+        default="", description="Название провайдера для текста: ЮKassa, Сбербанк"
+    )
+    #: Код валюты по ISO 4217 — для платежей нужен именно он, а не символ.
+    payment_currency: str = Field(default="RUB", min_length=3, max_length=3)
+    cash_payment_enabled: bool = Field(
+        default=True, description="Разрешить оплату при получении"
+    )
+
     # ── Витрина ───────────────────────────────────────────────────────────
     page_size: int = Field(default=6, ge=1, le=20, description="Товаров на странице каталога")
     track_stock: bool = Field(
@@ -45,6 +58,24 @@ class Settings(BaseSettings):
 
     db_path: str = Field(default="data/shop.db")
     log_level: str = Field(default="INFO")
+
+    @property
+    def online_payment_enabled(self) -> bool:
+        """Онлайн-оплата включена ровно тогда, когда есть токен провайдера."""
+        return bool(self.payment_provider_token)
+
+    def payment_choices(self) -> list[str]:
+        """Способы оплаты, доступные покупателю.
+
+        Пустой список означает, что об оплате бот не спрашивает вовсе:
+        продавец договаривается сам, как было до подключения платежей.
+        """
+        choices: list[str] = []
+        if self.online_payment_enabled:
+            choices.append("online")
+        if self.cash_payment_enabled:
+            choices.append("cash")
+        return choices
 
     def admins(self) -> set[int]:
         ids = {self.owner_id} if self.owner_id else set()

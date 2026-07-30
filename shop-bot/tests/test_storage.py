@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from shop.models import STATUS_ACCEPTED, STATUS_CANCELLED
+from shop.models import PAY_CASH, PAY_ONLINE, STATUS_ACCEPTED, STATUS_CANCELLED
 from shop.storage import EmptyCart, OutOfStock, Storage
 
 
@@ -281,3 +281,135 @@ async def test_low_stock_lists_what_is_running_out(storage: Storage):
 
     low = await storage.low_stock(threshold=3)
     assert [item.title for item in low] == ["Заканчивается"]
+
+
+# ── оплата ────────────────────────────────────────────────────────────────
+
+
+async def make_order(storage: Storage, **kwargs):
+    product_id = await add(storage)
+    await storage.cart_add(1, product_id, 1)
+    return await storage.create_order(
+        customer_id=1,
+        cart=await storage.get_cart(1),
+        delivery="pickup",
+        delivery_price=0,
+        name="Иван",
+        phone="+7 900 000-00-00",
+        **kwargs,
+    )
+
+
+async def test_new_order_is_unpaid_and_pays_on_delivery(storage: Storage):
+    order = await make_order(storage)
+    assert order.payment_method == PAY_CASH
+    assert not order.is_paid
+    assert order.paid_at is None
+
+
+async def test_payment_method_can_be_switched_before_paying(storage: Storage):
+    order = await make_order(storage)
+
+    updated = await storage.set_payment_method(order.id, PAY_ONLINE)
+    assert updated.payment_method == PAY_ONLINE
+    assert updated.awaits_payment
+
+
+async def test_mark_paid_records_the_charge(storage: Storage):
+    order = await make_order(storage)
+    paid = await storage.mark_paid(order.id, "charge-123")
+
+    assert paid.is_paid
+    assert paid.charge_id == "charge-123"
+    assert paid.paid_at is not None
+    # Оплата картой сама означает выбранный способ.
+    assert paid.payment_method == PAY_ONLINE
+    assert not paid.awaits_payment
+
+
+async def test_second_payment_notification_changes_nothing(storage: Storage):
+    """successful_payment может прийти повторно после сбоя сети."""
+    order = await make_order(storage)
+    await storage.mark_paid(order.id, "charge-123")
+
+    assert await storage.mark_paid(order.id, "charge-456") is None
+    assert (await storage.get_order(order.id)).charge_id == "charge-123"
+
+
+async def test_paid_order_keeps_its_payment_method(storage: Storage):
+    order = await make_order(storage)
+    await storage.mark_paid(order.id, "charge-123")
+
+    assert await storage.set_payment_method(order.id, PAY_CASH) is None
+    assert (await storage.get_order(order.id)).payment_method == PAY_ONLINE
+
+
+async def test_unpaid_online_orders_wait_before_showing_up(storage: Storage):
+    order = await make_order(storage)
+    await storage.set_payment_method(order.id, PAY_ONLINE)
+
+    # Только что оформленный заказ ещё не «зависший» — покупатель платит.
+    assert await storage.unpaid_online_orders(older_than_minutes=15) == []
+    assert len(await storage.unpaid_online_orders(older_than_minutes=0)) == 1
+
+    await storage.mark_paid(order.id, "charge-123")
+    assert await storage.unpaid_online_orders(older_than_minutes=0) == []
+
+
+async def test_cancelled_order_is_not_waiting_for_payment(storage: Storage):
+    order = await make_order(storage)
+    await storage.set_payment_method(order.id, PAY_ONLINE)
+    await storage.set_order_status(order.id, STATUS_CANCELLED)
+
+    assert await storage.unpaid_online_orders(older_than_minutes=0) == []
+
+
+async def test_stats_separate_paid_money_from_total_revenue(storage: Storage):
+    first = await make_order(storage)
+    await make_order(storage)
+    await storage.mark_paid(first.id, "charge-123")
+
+    stats = await storage.stats(30)
+    assert stats["orders"] == 2
+    assert stats["revenue"] == 1980  # оба заказа по 990
+    assert stats["paid_orders"] == 1
+    assert stats["paid_revenue"] == 990
+
+
+async def test_old_database_gets_the_payment_columns(tmp_path):
+    """У продавца, который уже принимает заказы, база создана без этих колонок."""
+    import aiosqlite
+
+    path = tmp_path / "old.db"
+    async with aiosqlite.connect(path) as db:
+        await db.executescript(
+            """
+            CREATE TABLE orders (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id    INTEGER NOT NULL,
+                goods_total    INTEGER NOT NULL,
+                delivery_price INTEGER NOT NULL DEFAULT 0,
+                delivery       TEXT NOT NULL DEFAULT 'pickup',
+                address        TEXT NOT NULL DEFAULT '',
+                name           TEXT NOT NULL DEFAULT '',
+                phone          TEXT NOT NULL DEFAULT '',
+                comment        TEXT NOT NULL DEFAULT '',
+                status         TEXT NOT NULL DEFAULT 'new',
+                created_at     TEXT NOT NULL
+            );
+            INSERT INTO orders (customer_id, goods_total, created_at)
+            VALUES (1, 990, '2026-07-01T10:00:00+00:00');
+            """
+        )
+        await db.commit()
+
+    async with Storage(str(path)) as storage:
+        order = await storage.get_order(1)
+        # Старый заказ цел, а новые поля получили значения по умолчанию.
+        assert order is not None
+        assert order.goods_total == 990
+        assert order.payment_method == PAY_CASH
+        assert not order.is_paid
+
+        paid = await storage.mark_paid(1, "charge-1")
+        assert paid.is_paid

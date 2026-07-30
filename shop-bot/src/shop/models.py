@@ -29,6 +29,17 @@ DELIVERY_TITLES = {
     DELIVERY_COURIER: "доставка",
 }
 
+PAY_ONLINE = "online"
+PAY_CASH = "cash"
+
+PAY_TITLES = {
+    PAY_ONLINE: "картой в боте",
+    PAY_CASH: "при получении",
+}
+
+PAYMENT_UNPAID = "unpaid"
+PAYMENT_PAID = "paid"
+
 
 @dataclass(slots=True)
 class Category:
@@ -132,6 +143,12 @@ class Order:
     created_at: datetime | None = None
     username: str | None = None
 
+    payment_method: str = PAY_CASH
+    payment_status: str = PAYMENT_UNPAID
+    paid_at: datetime | None = None
+    #: `telegram_payment_charge_id` — по нему возврат ищется в кабинете провайдера.
+    charge_id: str = ""
+
     @property
     def total(self) -> int:
         return self.goods_total + self.delivery_price
@@ -139,6 +156,15 @@ class Order:
     @property
     def is_open(self) -> bool:
         return self.status in {STATUS_NEW, STATUS_ACCEPTED}
+
+    @property
+    def is_paid(self) -> bool:
+        return self.payment_status == PAYMENT_PAID
+
+    @property
+    def awaits_payment(self) -> bool:
+        """Ждём онлайн-оплату: заказ жив, способ выбран, деньги не пришли."""
+        return self.is_open and self.payment_method == PAY_ONLINE and not self.is_paid
 
 
 @dataclass(slots=True)

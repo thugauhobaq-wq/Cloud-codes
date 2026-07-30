@@ -9,14 +9,23 @@ from ..notify import Notifier
 from ..storage import Storage
 from .admin import build_admin_router
 from .client import build_client_router
+from .payment import build_payment_router
 
 
 def build_router(storage: Storage, notifier: Notifier, settings: Settings) -> Router:
     root = Router(name="root")
     # Админский роутер первым: его команды не должны попадать в витрину.
     root.include_router(build_admin_router(storage, notifier, settings))
+    # Оплата — до витрины: успешный платёж приходит обычным сообщением, и
+    # клиентский роутер принял бы его за что-то своё.
+    root.include_router(build_payment_router(storage, notifier, settings))
     root.include_router(build_client_router(storage, notifier, settings))
     return root
 
 
-__all__ = ["build_admin_router", "build_client_router", "build_router"]
+__all__ = [
+    "build_admin_router",
+    "build_client_router",
+    "build_payment_router",
+    "build_router",
+]

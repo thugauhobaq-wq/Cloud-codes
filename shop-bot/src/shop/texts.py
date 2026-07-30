@@ -8,6 +8,8 @@ from .config import Settings
 from .models import (
     DELIVERY_COURIER,
     DELIVERY_TITLES,
+    PAY_ONLINE,
+    PAY_TITLES,
     STATUS_TITLES,
     Cart,
     Order,
@@ -104,6 +106,7 @@ def order_text(order: Order, settings: Settings, *, for_admin: bool = False) -> 
 
     lines.append("")
     lines.append(f"Способ: {DELIVERY_TITLES.get(order.delivery, order.delivery)}")
+    lines.append(f"Оплата: {payment_line(order)}")
     if order.address:
         lines.append(f"📍 {escape(order.address)}")
     if order.comment:
@@ -116,6 +119,27 @@ def order_text(order: Order, settings: Settings, *, for_admin: bool = False) -> 
         if order.username:
             lines.append(f"✍️ @{escape(order.username)}")
     return "\n".join(lines)
+
+
+def payment_line(order: Order) -> str:
+    """Как оплачен заказ — первое, что смотрит продавец перед отправкой."""
+    method = PAY_TITLES.get(order.payment_method, order.payment_method)
+    if order.is_paid:
+        return f"✅ оплачено {method}"
+    if order.payment_method == PAY_ONLINE:
+        return "⏳ ждём оплату картой"
+    return f"💵 {method}"
+
+
+def payment_prompt(order: Order, settings: Settings) -> str:
+    provider = ""
+    if settings.payment_provider_name:
+        provider = f" через {escape(settings.payment_provider_name)}"
+    return (
+        f"Заказ №{order.id} на <b>{money(order.total, settings)}</b> оформлен.\n\n"
+        f"Оплатите картой{provider} — и мы сразу начнём собирать заказ. "
+        "Или выберите оплату при получении."
+    )
 
 
 def order_short(order: Order, settings: Settings) -> str:

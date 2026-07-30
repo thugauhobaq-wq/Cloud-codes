@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramAPIError
 
 from .config import Settings
 from .keyboards import order_admin_keyboard
-from .models import STATUS_TITLES, Order
+from .models import PAY_ONLINE, PAY_TITLES, STATUS_TITLES, Order
 from .texts import money, order_text
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,21 @@ class Notifier:
             "🔔 <b>Новый заказ</b>\n\n" + order_text(order, self._settings, for_admin=True),
             reply_markup=order_admin_keyboard(order.id, order.status),
         )
+
+    async def payment_received(self, order: Order) -> None:
+        """Деньги пришли — продавцу это важнее самого заказа."""
+        await self.send_admins(
+            f"💰 <b>Оплачен заказ №{order.id}</b> — {money(order.total, self._settings)}\n\n"
+            + order_text(order, self._settings, for_admin=True),
+            reply_markup=order_admin_keyboard(order.id, order.status),
+        )
+
+    async def payment_method_chosen(self, order: Order) -> None:
+        """Покупатель выбрал оплату при получении вместо карты."""
+        if order.payment_method == PAY_ONLINE:
+            return
+        method = PAY_TITLES.get(order.payment_method, order.payment_method)
+        await self.send_admins(f"💵 Заказ №{order.id}: покупатель выбрал оплату {method}.")
 
     async def low_stock(self, titles: list[str]) -> None:
         if not titles:
