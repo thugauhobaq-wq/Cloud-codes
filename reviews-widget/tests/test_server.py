@@ -1,6 +1,7 @@
 """Сквозные проверки HTTP: поднимаем настоящий сервер на случайном порту."""
 
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -46,6 +47,32 @@ class ServerTestCase(unittest.TestCase):
     def tearDown(self):
         self.storage.delete_site(self.site.key)
         self.storage.close()
+        WidgetHandler.dashboard_db = ""
+
+    def enable_dashboard(self):
+        """Кладём рядом базу reviews-dashboard и включаем импорт с площадок."""
+        path = Path(self.tmp.name) / "dashboard.db"
+        conn = sqlite3.connect(path)
+        conn.executescript(
+            """CREATE TABLE IF NOT EXISTS reviews (
+                   uid TEXT PRIMARY KEY, source TEXT, company TEXT, text TEXT,
+                   pros TEXT, cons TEXT, reply TEXT, rating REAL, author TEXT, date TEXT);"""
+        )
+        conn.execute("DELETE FROM reviews")
+        conn.executemany(
+            "INSERT INTO reviews (uid, source, company, text, rating, author, date)"
+            " VALUES (?,?,?,?,?,?,?)",
+            [
+                ("d1", "yandex", "Кофейня", "Отличный кофе и быстрый вайфай тут",
+                 5.0, "Анна", "2026-06-01"),
+                ("d2", "2gis", "Кофейня", "Приятное место, вечером бывает шумно",
+                 4.0, "Дмитрий", "2026-05-20"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+        WidgetHandler.dashboard_db = str(path)
+        return path
 
     # ------------------------------------------------------------ хелперы
 
@@ -276,6 +303,65 @@ class ServerTestCase(unittest.TestCase):
                                        headers=self.admin_headers(),
                                        data={"action": "уничтожить"})
         self.assertEqual(status, 400)
+
+    # -------------------------------------------- импорт с площадок (дашборд)
+
+    def test_platforms_disabled_by_default(self):
+        status, data, _ = self.json_fetch("/api/admin/platforms",
+                                          headers=self.admin_headers())
+        self.assertEqual(status, 200)
+        self.assertFalse(data["available"])
+        self.assertIn("--dashboard-db", data["hint"])
+        self.assertEqual(data["companies"], [])
+
+    def test_platforms_requires_token(self):
+        self.enable_dashboard()
+        self.assertEqual(self.json_fetch("/api/admin/platforms")[0], 403)
+        self.assertEqual(
+            self.json_fetch("/api/admin/platforms", data={"company": "Кофейня"})[0], 403)
+
+    def test_platforms_lists_companies(self):
+        self.enable_dashboard()
+        _, data, _ = self.json_fetch("/api/admin/platforms", headers=self.admin_headers())
+        self.assertTrue(data["available"])
+        self.assertEqual(data["companies"][0]["company"], "Кофейня")
+        self.assertEqual(data["companies"][0]["total"], 2)
+        self.assertEqual(data["platforms"]["yandex"], "Яндекс.Карты")
+
+    def test_platforms_pull_into_moderation(self):
+        self.enable_dashboard()
+        status, data, _ = self.json_fetch("/api/admin/platforms",
+                                         headers=self.admin_headers(),
+                                         data={"company": "Кофейня", "min_rating": 1})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["stats"]["added"], 2)
+        self.assertEqual(data["counts"]["pending"], 2)
+        # На сайте их пока не видно — сначала модерация.
+        _, widget, _ = self.json_fetch(f"/api/v1/widget?site={self.site.key}")
+        self.assertEqual(widget["reviews"], [])
+
+    def test_platforms_pull_with_publish_and_source_filter(self):
+        self.enable_dashboard()
+        _, data, _ = self.json_fetch("/api/admin/platforms", headers=self.admin_headers(),
+                                     data={"company": "Кофейня", "source": "yandex",
+                                           "publish": True})
+        self.assertEqual(data["stats"]["added"], 1)
+        _, widget, _ = self.json_fetch(f"/api/v1/widget?site={self.site.key}")
+        self.assertEqual(len(widget["reviews"]), 1)
+        self.assertEqual(widget["reviews"][0]["source"], "yandex")
+
+    def test_platforms_pull_without_dashboard_is_rejected(self):
+        status, data, _ = self.json_fetch("/api/admin/platforms",
+                                         headers=self.admin_headers(),
+                                         data={"company": "Кофейня"})
+        self.assertEqual(status, 400)
+        self.assertIn("error", data)
+
+    def test_platforms_broken_path_reported(self):
+        WidgetHandler.dashboard_db = str(Path(self.tmp.name) / "нет-такой.db")
+        _, data, _ = self.json_fetch("/api/admin/platforms", headers=self.admin_headers())
+        self.assertFalse(data["available"])
+        self.assertIn("не найдена", data["reason"])
 
     # ------------------------------------------------------------ страницы
 

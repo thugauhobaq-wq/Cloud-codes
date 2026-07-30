@@ -25,6 +25,26 @@ class SpamTest(unittest.TestCase):
         self.assertIn("repeats", check_text("Ужааааааасно, не советую никому вообще").flags)
         self.assertIn("caps", check_text("ОЧЕНЬ ПЛОХОЙ СЕРВИС НИКОМУ НЕ СОВЕТУЮ ВООБЩЕ").flags)
 
+    def test_spam_words_match_word_starts_not_substrings(self):
+        # «доставка» содержит «ставк» — на этом ловились обычные отзывы
+        # маркетплейсов, где про доставку пишет чуть ли не каждый второй.
+        for text in (
+            "Быстрая доставка, курьер приехал раньше срока. Упаковка целая",
+            "Доставили вовремя, доставка бесплатная при заказе от двух тысяч",
+            "Перестановка мебели заняла час, всё аккуратно",
+        ):
+            verdict = check_text(text)
+            self.assertTrue(verdict.ok, text)
+            self.assertNotIn("spam-words", verdict.flags, text)
+
+    def test_real_spam_stems_still_caught(self):
+        for text in (
+            "Ставки на спорт каждый день, пишите в личку за прогнозами",
+            "Даём займы без отказа, оформление за пять минут",
+            "Накрутка подписчиков дёшево, обращайтесь",
+        ):
+            self.assertIn("spam-words", check_text(text).flags, text)
+
     def test_repetitive_word_soup(self):
         verdict = check_text("купить купить купить дёшево купить купить дёшево купить купить")
         self.assertIn("repetitive", verdict.flags)

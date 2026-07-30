@@ -19,7 +19,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import telegram
+from . import dashboard, telegram
+from .dashboard import DashboardError
 from .models import (
     MAX_REPLY,
     Review,
@@ -46,6 +47,8 @@ class WidgetHandler(BaseHTTPRequestHandler):
 
     db_path: str = str(DEFAULT_DB)
     public_url: str = ""
+    #: Путь к базе reviews-dashboard. Пусто — импорт с площадок выключен.
+    dashboard_db: str = ""
     limiter = RateLimiter()
 
     # ------------------------------------------------------------- сервис
@@ -151,6 +154,8 @@ class WidgetHandler(BaseHTTPRequestHandler):
                 self._admin_site()
             elif route == "/api/admin/reviews":
                 self._admin_reviews(params)
+            elif route == "/api/admin/platforms":
+                self._admin_platforms()
             elif route.startswith("/assets/"):
                 self._static(route[8:])
             elif route == "/healthz":
@@ -181,6 +186,8 @@ class WidgetHandler(BaseHTTPRequestHandler):
                 self._admin_update()
             elif route.startswith("/api/admin/reviews/"):
                 self._admin_action(route.rsplit("/", 1)[-1])
+            elif route == "/api/admin/platforms":
+                self._admin_pull()
             else:
                 self._json({"error": "не найдено"}, status=404)
         except PermissionError as error:
@@ -448,6 +455,55 @@ class WidgetHandler(BaseHTTPRequestHandler):
             }
         self._json(payload)
 
+    # ------------------------------------------- импорт с площадок (дашборд)
+
+    def _admin_platforms(self) -> None:
+        """Что можно подтянуть из reviews-dashboard. Если он не подключён —
+        честно говорим об этом и подсказываем команду."""
+        with self._storage() as storage:
+            self._auth(storage)
+
+        if not self.dashboard_db:
+            self._json({
+                "available": False,
+                "reason": "Импорт с площадок не подключён к этому серверу.",
+                "hint": "Запустите сервер с флагом --dashboard-db "
+                        "путь/к/reviews-dashboard/data/reviews.db",
+                "companies": [],
+            })
+            return
+        try:
+            companies = dashboard.companies(self.dashboard_db)
+        except DashboardError as error:
+            self._json({"available": False, "reason": str(error), "companies": []})
+            return
+        self._json({"available": True, "companies": companies,
+                    "platforms": dashboard.PLATFORMS})
+
+    def _admin_pull(self) -> None:
+        if not self.dashboard_db:
+            self._json({"error": "импорт с площадок не подключён"}, status=400)
+            return
+
+        data = self._body()
+        with self._storage() as storage:
+            site = self._auth(storage)
+            try:
+                stats = dashboard.pull(
+                    storage, site, self.dashboard_db,
+                    company=clean_text(data.get("company"), 120) or None,
+                    source=str(data.get("source") or "") or None,
+                    min_rating=_clamp(data.get("min_rating"), 1, 1, 5),
+                    since=clean_text(data.get("since"), 10) or None,
+                    limit=_clamp(data.get("limit"), 200, 1, 1000),
+                    publish=data.get("publish") in (True, 1, "1", "true", "on"),
+                )
+            except DashboardError as error:
+                self._json({"error": str(error)}, status=400)
+                return
+            payload = {"ok": True, "stats": stats, "counts": storage.counts(site.key)}
+        self._json(payload)
+
     def _admin_action(self, raw_id: str) -> None:
         try:
             review_id = int(raw_id)
@@ -502,11 +558,14 @@ def _notify_async(site: Site, review: Review, base_url: str) -> None:
 
 
 def serve(host: str = "127.0.0.1", port: int = 8080, db_path: str = str(DEFAULT_DB),
-          public_url: str = "") -> None:
+          public_url: str = "", dashboard_db: str = "") -> None:
     WidgetHandler.db_path = db_path
     WidgetHandler.public_url = public_url
+    WidgetHandler.dashboard_db = dashboard_db
     httpd = ThreadingHTTPServer((host, port), WidgetHandler)
     print(f"Виджет отзывов: http://{host}:{port}  (админка /admin, база {db_path})")
+    if dashboard_db:
+        print(f"Импорт с площадок: {dashboard_db}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

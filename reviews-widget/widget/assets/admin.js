@@ -5,6 +5,10 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var STORE = "rw-admin";
+  var SOURCE_LABELS = {
+    form: "Сайт", telegram: "Telegram", import: "Импорт", demo: "Демо", file: "Выгрузка",
+    yandex: "Яндекс.Карты", "2gis": "2ГИС", wildberries: "Wildberries", ozon: "Ozon"
+  };
   var auth = { site: "", token: "" };
   var tab = "pending";
 
@@ -72,7 +76,97 @@
     $("listPanel").hidden = ["pending", "published", "rejected"].indexOf(tab) < 0;
     $("setupPanel").hidden = tab !== "setup";
     $("settingsPanel").hidden = tab !== "settings";
+    $("platformsPanel").hidden = tab !== "platforms";
     if (!$("listPanel").hidden) load();
+    if (tab === "platforms") loadPlatforms();
+  });
+
+  /* ------------------------------------------------- отзывы с площадок */
+
+  var platformTitles = {};
+
+  function loadPlatforms() {
+    return api("/api/admin/platforms").then(function (data) {
+      platformTitles = data.platforms || {};
+      $("platformsOff").hidden = data.available;
+      $("platformsForm").hidden = !data.available;
+      if (!data.available) {
+        $("platformsReason").textContent = data.reason || "Импорт недоступен.";
+        $("platformsHint").textContent = data.hint || "";
+        return;
+      }
+
+      var companies = data.companies || [];
+      var select = $("platformsCompany");
+      select.textContent = "";
+      if (!companies.length) {
+        $("platformsInfo").textContent =
+          "В базе дашборда пока нет отзывов — сначала соберите их дашбордом.";
+        $("pullButton").disabled = true;
+        return;
+      }
+      $("pullButton").disabled = false;
+      companies.forEach(function (row) {
+        var option = document.createElement("option");
+        option.value = row.company;
+        option.textContent = row.company + " — " + row.total + " отзывов" +
+          (row.avg_rating ? ", средняя " + row.avg_rating : "");
+        select.appendChild(option);
+      });
+      showCompanyInfo(companies);
+      select.onchange = function () { showCompanyInfo(companies); };
+    }).catch(function (error) { console.warn(error); });
+  }
+
+  function showCompanyInfo(companies) {
+    var picked = companies.filter(function (row) {
+      return row.company === $("platformsCompany").value;
+    })[0];
+    var sources = $("platformsSource");
+    // Оставляем «все площадки» и подставляем те, что реально есть у компании.
+    sources.textContent = "";
+    var all = document.createElement("option");
+    all.value = "";
+    all.textContent = "все площадки";
+    sources.appendChild(all);
+    if (!picked) return;
+    (picked.sources || []).forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      option.textContent = platformTitles[name] || name;
+      sources.appendChild(option);
+    });
+    $("platformsInfo").textContent = "Последний отзыв: " + (picked.last_date || "неизвестно") +
+      ". Площадки: " + ((picked.titles || []).join(", ") || "—") + ".";
+  }
+
+  $("platformsForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var body = {
+      company: form.company.value,
+      source: form.source.value,
+      min_rating: form.min_rating.value,
+      limit: form.limit.value,
+      publish: form.publish.checked
+    };
+    $("pullButton").disabled = true;
+    $("pullButton").textContent = "Забираем…";
+    api("/api/admin/platforms", { method: "POST", body: body }).then(function (data) {
+      var s = data.stats;
+      var text = "Добавлено: " + s.added + ", уже было: " + s.duplicates +
+        ", пропущено: " + s.skipped;
+      if (s.flagged) text += ". Помечено антиспамом: " + s.flagged;
+      $("pullResult").textContent = text;
+      $("pullResult").hidden = false;
+      paintCounts(data.counts);
+    }).catch(function (error) {
+      $("pullResult").textContent = error.message;
+      $("pullResult").hidden = false;
+    }).then(function () {
+      $("pullButton").disabled = false;
+      $("pullButton").textContent = "Забрать отзывы";
+    });
   });
 
   /* -------------------------------------------------------------- сайт */
@@ -180,8 +274,7 @@
 
     node.querySelector(".stars").textContent =
       "★".repeat(review.rating) + "☆".repeat(5 - review.rating);
-    node.querySelector(".source").textContent =
-      review.source === "telegram" ? "Telegram" : review.source === "form" ? "Сайт" : review.source;
+    node.querySelector(".source").textContent = SOURCE_LABELS[review.source] || review.source;
     node.querySelector(".pin").hidden = !review.pinned;
     node.querySelector("time").textContent = formatDate(review.created_at);
     node.querySelector(".text").textContent = review.text;

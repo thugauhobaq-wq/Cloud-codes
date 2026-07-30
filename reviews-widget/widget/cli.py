@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import telegram
+from . import dashboard, telegram
+from .dashboard import DEFAULT_DASHBOARD_DB as DASHBOARD_DB
+from .dashboard import PLATFORMS, DashboardError
 from .demo import generate
 from .models import (
     DEFAULT_SETTINGS,
@@ -63,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     server.add_argument("--port", type=int, default=8080)
     server.add_argument("--public-url", default="",
                         help="внешний адрес, если сервер стоит за прокси")
+    server.add_argument("--dashboard-db", default="",
+                        help="база reviews-dashboard: включает импорт с площадок в кабинете")
 
     bot = sub.add_parser("bot", help="Telegram-бот, собирающий отзывы")
     bot.add_argument("--site", help="ключ сайта; без него — все сайты с токеном")
@@ -76,6 +80,22 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--site", required=True)
     imp.add_argument("--file", required=True)
     imp.add_argument("--publish", action="store_true", help="сразу опубликовать")
+
+    pull = sub.add_parser(
+        "pull", help="забрать отзывы с площадок из базы reviews-dashboard")
+    pull.add_argument("--site", required=True)
+    pull.add_argument("--from", dest="source_db", default=str(DASHBOARD_DB),
+                      help="путь к базе reviews-dashboard")
+    pull.add_argument("--company", help="какую компанию брать (без флага — все)")
+    pull.add_argument("--source", choices=sorted(PLATFORMS), help="только одна площадка")
+    pull.add_argument("--min-rating", type=int, default=1, choices=[1, 2, 3, 4, 5],
+                      help="брать отзывы не ниже этой оценки")
+    pull.add_argument("--since", help="только свежее этой даты, ГГГГ-ММ-ДД")
+    pull.add_argument("--limit", type=int, default=None)
+    pull.add_argument("--publish", action="store_true",
+                      help="публиковать сразу, минуя модерацию")
+    pull.add_argument("--list", action="store_true",
+                      help="только показать, что есть в базе дашборда")
 
     listing = sub.add_parser("reviews", help="показать отзывы в консоли")
     listing.add_argument("--site", required=True)
@@ -238,7 +258,45 @@ def cmd_site(args: argparse.Namespace, storage: Storage) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    serve(host=args.host, port=args.port, db_path=args.db, public_url=args.public_url)
+    serve(host=args.host, port=args.port, db_path=args.db, public_url=args.public_url,
+          dashboard_db=args.dashboard_db)
+    return 0
+
+
+def cmd_pull(args: argparse.Namespace, storage: Storage, site: Site) -> int:
+    """Импорт отзывов с площадок из базы соседнего reviews-dashboard."""
+    try:
+        if args.list:
+            rows = dashboard.companies(args.source_db)
+            if not rows:
+                print("В базе дашборда пока нет отзывов")
+                return 0
+            print(f"Компании в {args.source_db}:\n")
+            for row in rows:
+                rating = f"{row['avg_rating']:.2f}" if row["avg_rating"] else "—"
+                print(f"  {row['company']}")
+                print(f"    отзывов: {row['total']}, средняя: {rating}, "
+                      f"последний: {row['last_date'] or '—'}")
+                print(f"    площадки: {', '.join(row['titles']) or '—'}")
+            return 0
+
+        stats = dashboard.pull(
+            storage, site, args.source_db,
+            company=args.company, source=args.source, min_rating=args.min_rating,
+            since=args.since, limit=args.limit, publish=args.publish,
+        )
+    except DashboardError as error:
+        print(f"Ошибка: {error}", file=sys.stderr)
+        print("Соберите отзывы дашбордом или укажите путь флагом --from", file=sys.stderr)
+        return 1
+
+    print(f"Найдено на площадках: {stats['seen']}")
+    print(f"Добавлено: {stats['added']}, уже было: {stats['duplicates']}, "
+          f"пропущено: {stats['skipped']}")
+    if stats["flagged"]:
+        print(f"Помечено антиспамом (только на модерацию): {stats['flagged']}")
+    if stats["added"] and not args.publish:
+        print(f"\nОтзывы ждут проверки: http://localhost:8080/admin?site={site.key}")
     return 0
 
 
@@ -297,6 +355,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Добавлено демо-отзывов: {added}")
             print(f"Смотреть: http://localhost:8080/preview/{site.key}")
             return 0
+
+        if args.command == "pull":
+            return cmd_pull(args, storage, site)
 
         if args.command == "import":
             path = Path(args.file)
