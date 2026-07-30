@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -11,11 +12,18 @@ from .models import DEFAULT_SETTINGS, Review, Site, normalize_settings, now_iso
 
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "widget.db"
 
+#: Базы, схему которых этот процесс уже проверил. Сервер открывает соединение
+#: на каждый запрос, и прогонять DDL каждый раз незачем: это около 0.1 мс из
+#: примерно 2 мс на запрос — немного, но и не бесплатно, а миграции тем более
+#: должны выполняться однажды.
+_READY: set[str] = set()
+_READY_LOCK = threading.Lock()
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sites (
     key               TEXT PRIMARY KEY,
     name              TEXT NOT NULL,
-    admin_token       TEXT NOT NULL,
+    token_hash        TEXT NOT NULL DEFAULT '',
     domains           TEXT NOT NULL DEFAULT '[]',
     auto_approve      INTEGER NOT NULL DEFAULT 0,
     auto_approve_from INTEGER NOT NULL DEFAULT 5,
@@ -47,12 +55,38 @@ CREATE INDEX IF NOT EXISTS idx_reviews_site   ON reviews(site, status);
 CREATE INDEX IF NOT EXISTS idx_reviews_date   ON reviews(site, created_at);
 """
 
+#: Пересборка таблицы сайтов при переходе с открытого токена на хеш. Просто
+#: добавить колонку нельзя: у старого `admin_token` было NOT NULL без значения
+#: по умолчанию, и новые сайты в такую таблицу уже не вставились бы.
+REBUILD_SITES = """
+CREATE TABLE sites_new (
+    key               TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    token_hash        TEXT NOT NULL DEFAULT '',
+    domains           TEXT NOT NULL DEFAULT '[]',
+    auto_approve      INTEGER NOT NULL DEFAULT 0,
+    auto_approve_from INTEGER NOT NULL DEFAULT 5,
+    telegram_token    TEXT NOT NULL DEFAULT '',
+    telegram_chat     TEXT NOT NULL DEFAULT '',
+    settings          TEXT NOT NULL DEFAULT '{}',
+    created_at        TEXT NOT NULL
+);
+INSERT INTO sites_new (key, name, token_hash, domains, auto_approve,
+                       auto_approve_from, telegram_token, telegram_chat,
+                       settings, created_at)
+SELECT key, name, admin_token, domains, auto_approve, auto_approve_from,
+       telegram_token, telegram_chat, settings, created_at
+FROM sites;
+DROP TABLE sites;
+ALTER TABLE sites_new RENAME TO sites;
+"""
+
 
 def _row_to_site(row: sqlite3.Row) -> Site:
     return Site(
         key=row["key"],
         name=row["name"],
-        admin_token=row["admin_token"],
+        token_hash=row["token_hash"],
         domains=json.loads(row["domains"] or "[]"),
         auto_approve=bool(row["auto_approve"]),
         auto_approve_from=int(row["auto_approve_from"]),
@@ -83,12 +117,40 @@ def _row_to_review(row: sqlite3.Row) -> Review:
 
 
 class Storage:
-    def __init__(self, path: str | Path = DEFAULT_DB) -> None:
+    def __init__(self, path: str | Path = DEFAULT_DB, migrate: bool | None = None) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # Ждать освободившуюся блокировку, а не падать: писать могут сразу
+        # сервер, бот и импорт из консоли. Столько же ставит и sqlite3 по
+        # умолчанию — здесь это записано явно, чтобы не зависеть от версии.
+        self._conn.execute("PRAGMA busy_timeout = 5000")
+
+        key = str(self.path.resolve())
+        if migrate is None:
+            migrate = key not in _READY
+        if migrate:
+            with _READY_LOCK:
+                self._prepare()
+                _READY.add(key)
+
+    def _prepare(self) -> None:
+        """Создаёт схему и доводит старые базы до текущей. Один раз на процесс."""
+        try:
+            # WAL: читатель не блокирует писателя. На нагрузке, которую удалось
+            # воспроизвести, разницы в скорости нет — берём его не за скорость,
+            # а чтобы отдача отзывов не могла встать в очередь за импортом или
+            # приёмом формы. Режим запоминается в файле базы, поэтому ставим
+            # его только при подготовке.
+            self._conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.Error:
+            # Сетевые и read-only ФС WAL не поддерживают — работаем как раньше.
+            pass
         self._conn.executescript(SCHEMA)
+        columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(sites)")}
+        if "token_hash" not in columns and "admin_token" in columns:
+            self._conn.executescript(REBUILD_SITES)
         self._conn.commit()
 
     def close(self) -> None:
@@ -104,12 +166,12 @@ class Storage:
 
     def add_site(self, site: Site) -> Site:
         self._conn.execute(
-            """INSERT INTO sites (key, name, admin_token, domains, auto_approve,
+            """INSERT INTO sites (key, name, token_hash, domains, auto_approve,
                                   auto_approve_from, telegram_token, telegram_chat,
                                   settings, created_at)
                VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (
-                site.key, site.name, site.admin_token, json.dumps(site.domains, ensure_ascii=False),
+                site.key, site.name, site.token_hash, json.dumps(site.domains, ensure_ascii=False),
                 int(site.auto_approve), site.auto_approve_from, site.telegram_token,
                 site.telegram_chat, json.dumps(site.settings, ensure_ascii=False), site.created_at,
             ),
@@ -145,7 +207,7 @@ class Storage:
             fields["auto_approve"] = int(bool(fields["auto_approve"]))
 
         allowed = {
-            "name", "admin_token", "domains", "auto_approve", "auto_approve_from",
+            "name", "token_hash", "domains", "auto_approve", "auto_approve_from",
             "telegram_token", "telegram_chat", "settings",
         }
         pairs = {k: v for k, v in fields.items() if k in allowed}

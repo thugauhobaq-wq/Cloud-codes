@@ -96,7 +96,7 @@ class ServerTestCase(unittest.TestCase):
         return status, json.loads(body or "{}"), headers
 
     def admin_headers(self):
-        return {"X-Site": self.site.key, "X-Admin-Token": self.site.admin_token}
+        return {"X-Site": self.site.key, "X-Admin-Token": self.site.plain_token}
 
     def publish(self, text, rating=5, author="Аня"):
         review = Review.build(self.site.key, text, rating, author)
@@ -230,6 +230,31 @@ class ServerTestCase(unittest.TestCase):
         self.assertNotIn("<script>", stored.text)
 
     # ------------------------------------------------------------ админка
+
+    def test_non_ascii_token_is_rejected_not_crashed(self):
+        # Заголовки декодируются как latin-1, так что в токене может приехать
+        # что угодно. Ответ должен быть 403, а не 500.
+        status, _, _ = self.json_fetch("/api/admin/site", headers={
+            "X-Site": self.site.key, "X-Admin-Token": "töken-é"})
+        self.assertEqual(status, 403)
+
+    def test_legacy_plaintext_token_works_and_is_upgraded(self):
+        """База из первых версий: токен лежал открытым текстом."""
+        # Настоящие токены всегда ASCII: их выдаёт secrets.token_urlsafe.
+        plain = "legacy-token-from-old-database"
+        self.storage.update_site(self.site.key, token_hash=plain)
+        self.assertTrue(self.storage.get_site(self.site.key).token_needs_upgrade())
+
+        status, _, _ = self.json_fetch("/api/admin/site", headers={
+            "X-Site": self.site.key, "X-Admin-Token": plain})
+        self.assertEqual(status, 200)
+
+        upgraded = self.storage.get_site(self.site.key)
+        self.assertTrue(upgraded.token_hash.startswith("sha256$"))
+        self.assertNotIn(plain, upgraded.token_hash)
+        # Тот же токен продолжает работать, уже против хеша.
+        self.assertEqual(self.json_fetch("/api/admin/site", headers={
+            "X-Site": self.site.key, "X-Admin-Token": plain})[0], 200)
 
     def test_admin_requires_token(self):
         self.assertEqual(self.json_fetch("/api/admin/site")[0], 403)

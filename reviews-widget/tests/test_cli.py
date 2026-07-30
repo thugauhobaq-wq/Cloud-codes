@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -31,13 +32,48 @@ class CliTest(unittest.TestCase):
 
     # ------------------------------------------------------------- сайты
 
+    def test_embed_line_uses_public_url_from_env(self):
+        """В контейнере адрес задан env — подсказки не должны врать про localhost."""
+        site = self.make_site()
+        _, out, _ = self.run_cli("site", "show", "--site", site.key)
+        self.assertIn("http://localhost:8080/w/", out)
+
+        os.environ["WIDGET_PUBLIC_URL"] = "https://widgets.example.ru/"
+        try:
+            _, out, _ = self.run_cli("site", "show", "--site", site.key)
+        finally:
+            del os.environ["WIDGET_PUBLIC_URL"]
+        self.assertIn(f'https://widgets.example.ru/w/{site.key}.js', out)
+        self.assertIn(f"https://widgets.example.ru/f/{site.key}", out)
+        self.assertNotIn("localhost", out)
+
+    def test_site_show_does_not_print_token(self):
+        site = self.make_site()
+        _, out, _ = self.run_cli("site", "show", "--site", site.key)
+        self.assertIn("нельзя", out)
+        self.assertIn("rotate-token", out)
+
+    def test_rotate_token_gives_new_working_token(self):
+        site = self.make_site()
+        old_hash = site.token_hash
+        _, out, _ = self.run_cli("site", "rotate-token", "--site", site.key)
+        self.assertIn("Новый токен", out)
+        token = [line.strip() for line in out.splitlines() if line.startswith("  ")][0]
+
+        with Storage(self.db) as storage:
+            updated = storage.get_site(site.key)
+        self.assertNotEqual(updated.token_hash, old_hash)
+        self.assertTrue(updated.check_token(token))
+
     def test_site_add_prints_embed_line(self):
         code, out, _ = self.run_cli("site", "add", "--name", "Кофейня")
         self.assertEqual(code, 0)
         with Storage(self.db) as storage:
             site = storage.list_sites()[0]
         self.assertIn(f"/w/{site.key}.js", out)
-        self.assertIn(site.admin_token, out)
+        # Токен печатается один раз при создании и в базе лежит хешем.
+        self.assertRegex(out, r"токен:\s+\S{20,}")
+        self.assertTrue(site.token_hash.startswith("sha256$"))
 
     def test_site_add_with_demo_fills_reviews(self):
         site = self.make_site("--demo")

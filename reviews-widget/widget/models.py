@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import html
 import json
 import re
@@ -83,8 +84,41 @@ def new_key(prefix: str = "s") -> str:
 
 
 def new_token() -> str:
-    """Секрет для входа в админку конкретного сайта."""
+    """Секрет для входа в админку конкретного сайта. Показывается один раз."""
     return secrets.token_urlsafe(24)
+
+
+def hash_token(token: str) -> str:
+    """Токен в базе лежит хешем: утечка базы не должна давать доступ к админкам.
+
+    Медленный KDF здесь не нужен — токен генерируем сами и в нём 192 бита
+    случайности, перебирать его нечем. Соль защищает от радужных таблиц и от
+    того, чтобы одинаковые токены выглядели одинаково.
+    """
+    salt = secrets.token_hex(8)
+    digest = hashlib.sha256(f"{salt}{token}".encode("utf-8")).hexdigest()
+    return f"sha256${salt}${digest}"
+
+
+def verify_token(stored: str, token: str) -> bool:
+    """Сравнение за постоянное время.
+
+    Сравниваем именно байты: `hmac.compare_digest` на строках с не-ASCII
+    падает с TypeError, а токен приходит из HTTP-заголовка, где может
+    оказаться что угодно — это должно быть «не подошло», а не ошибка сервера.
+    """
+    if not stored or not token:
+        return False
+    if stored.startswith("sha256$"):
+        try:
+            _, salt, digest = stored.split("$", 2)
+        except ValueError:
+            return False
+        expected = hashlib.sha256(f"{salt}{token}".encode("utf-8")).hexdigest()
+        return hmac.compare_digest(expected.encode("ascii"), digest.encode("utf-8", "replace"))
+    # Базы первых версий хранили токен открытым текстом — пускаем и их,
+    # при первом успешном входе значение заменяется хешем.
+    return hmac.compare_digest(stored.encode("utf-8"), token.encode("utf-8"))
 
 
 def clean_text(value: Any, limit: int) -> str:
@@ -183,7 +217,8 @@ class Site:
 
     key: str
     name: str
-    admin_token: str = field(default_factory=new_token)
+    #: Хеш токена админки, а не сам токен.
+    token_hash: str = ""
     domains: list[str] = field(default_factory=list)
     auto_approve: bool = False
     auto_approve_from: int = 5      # с какой оценки публиковать без модерации
@@ -191,11 +226,30 @@ class Site:
     telegram_chat: str = ""         # куда слать уведомления о новых отзывах
     settings: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_SETTINGS))
     created_at: str = field(default_factory=now_iso)
+    #: Токен открытым текстом — живёт только в памяти сразу после выдачи,
+    #: чтобы CLI мог показать его один раз. В базу не попадает.
+    plain_token: str = field(default="", compare=False, repr=False)
 
     @classmethod
     def create(cls, name: str, **kwargs: Any) -> "Site":
         name = clean_text(name, 80) or "Мой сайт"
-        return cls(key=new_key(), name=name, **kwargs)
+        token = kwargs.pop("token", None) or new_token()
+        site = cls(key=new_key(), name=name, token_hash=hash_token(token), **kwargs)
+        site.plain_token = token
+        return site
+
+    def check_token(self, value: str) -> bool:
+        return verify_token(self.token_hash, value)
+
+    def token_needs_upgrade(self) -> bool:
+        """У старых баз токен лежит открытым текстом — стоит перехешировать."""
+        return bool(self.token_hash) and not self.token_hash.startswith("sha256$")
+
+    def rotate_token(self) -> str:
+        token = new_token()
+        self.token_hash = hash_token(token)
+        self.plain_token = token
+        return token
 
     def public(self) -> dict[str, Any]:
         return {"key": self.key, "name": self.name, "settings": self.settings}

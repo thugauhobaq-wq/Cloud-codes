@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,7 +28,8 @@ class StorageTest(unittest.TestCase):
     def test_site_roundtrip(self):
         loaded = self.storage.get_site(self.site.key)
         self.assertEqual(loaded.name, "Кофейня")
-        self.assertEqual(loaded.admin_token, self.site.admin_token)
+        self.assertEqual(loaded.token_hash, self.site.token_hash)
+        self.assertTrue(loaded.check_token(self.site.plain_token))
         self.assertEqual(loaded.settings["theme"], "auto")
 
     def test_update_site_merges_settings(self):
@@ -38,8 +40,8 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(updated.settings["limit"], 20)
 
     def test_update_site_ignores_unknown_columns(self):
-        self.storage.update_site(self.site.key, admin_token="новый", key="взлом")
-        self.assertEqual(self.storage.get_site(self.site.key).admin_token, "новый")
+        self.storage.update_site(self.site.key, token_hash="новый", key="взлом")
+        self.assertEqual(self.storage.get_site(self.site.key).token_hash, "новый")
 
     def test_delete_site_removes_reviews(self):
         self.add("Отличный кофе и вежливые баристы")
@@ -51,6 +53,53 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(self.storage.sites_with_bot(), [])
         self.storage.update_site(self.site.key, telegram_token="123:AA")
         self.assertEqual([s.key for s in self.storage.sites_with_bot()], [self.site.key])
+
+    def test_schema_prepared_once_per_process(self):
+        """DDL не должен выполняться на каждое открытие соединения."""
+        path = Path(self.tmp.name) / "ready.db"
+        Storage(path).close()
+        second = Storage(path)
+        try:
+            # Схема уже готова: второе соединение её не пересоздаёт, но всё
+            # читает и пишет как обычно.
+            site = second.add_site(Site.create("Второй"))
+            self.assertIsNotNone(second.get_site(site.key))
+        finally:
+            second.close()
+
+    def test_wal_enabled(self):
+        mode = self.storage._conn.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(mode.lower(), "wal")
+
+    def test_old_database_with_plaintext_token_migrates(self):
+        """База первой версии: колонка admin_token, NOT NULL и без default."""
+        path = Path(self.tmp.name) / "legacy.db"
+        conn = sqlite3.connect(path)
+        conn.executescript("""
+            CREATE TABLE sites (
+                key TEXT PRIMARY KEY, name TEXT NOT NULL, admin_token TEXT NOT NULL,
+                domains TEXT NOT NULL DEFAULT '[]', auto_approve INTEGER NOT NULL DEFAULT 0,
+                auto_approve_from INTEGER NOT NULL DEFAULT 5,
+                telegram_token TEXT NOT NULL DEFAULT '',
+                telegram_chat TEXT NOT NULL DEFAULT '',
+                settings TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
+        """)
+        conn.execute(
+            "INSERT INTO sites (key, name, admin_token, created_at)"
+            " VALUES ('s_legacy', 'Старый сайт', 'открытый-токен', '2026-01-01T00:00:00+00:00')"
+        )
+        conn.commit()
+        conn.close()
+
+        with Storage(path) as storage:
+            site = storage.get_site("s_legacy")
+            self.assertEqual(site.name, "Старый сайт")
+            # Токен перенесён как есть и продолжает работать.
+            self.assertTrue(site.check_token("открытый-токен"))
+            self.assertTrue(site.token_needs_upgrade())
+            # В новую таблицу вставляются новые сайты — старый NOT NULL не мешает.
+            fresh = storage.add_site(Site.create("Новый"))
+            self.assertTrue(storage.get_site(fresh.key).check_token(fresh.plain_token))
 
     # ------------------------------------------------------------ отзывы
 

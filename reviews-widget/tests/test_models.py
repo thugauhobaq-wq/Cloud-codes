@@ -5,10 +5,12 @@ from widget.models import (
     Site,
     ValidationError,
     clean_text,
+    hash_token,
     initials,
     normalize_domains,
     normalize_settings,
     parse_rating,
+    verify_token,
 )
 
 
@@ -109,6 +111,52 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(normalize_settings('{"layout": "grid"}')["layout"], "grid")
 
 
+class TokenTest(unittest.TestCase):
+    def test_hash_is_salted_and_verifies(self):
+        token = "секретный-токен"
+        first, second = hash_token(token), hash_token(token)
+        self.assertNotEqual(first, second)          # соль у каждого своя
+        self.assertTrue(first.startswith("sha256$"))
+        self.assertNotIn(token, first)
+        self.assertTrue(verify_token(first, token))
+        self.assertTrue(verify_token(second, token))
+
+    def test_wrong_token_rejected(self):
+        stored = hash_token("правильный")
+        for value in ("неправильный", "", "правильный "):
+            self.assertFalse(verify_token(stored, value))
+
+    def test_empty_and_broken_hashes_reject(self):
+        self.assertFalse(verify_token("", "что-то"))
+        self.assertFalse(verify_token("sha256$сломано", "что-то"))
+
+    def test_legacy_plaintext_still_verifies(self):
+        # Базы первых версий хранили токен как есть — доступ терять нельзя.
+        self.assertTrue(verify_token("открытый-токен", "открытый-токен"))
+        self.assertFalse(verify_token("открытый-токен", "другой"))
+
+    def test_site_create_keeps_plain_token_out_of_hash(self):
+        site = Site.create("Тест")
+        self.assertTrue(site.plain_token)
+        self.assertNotIn(site.plain_token, site.token_hash)
+        self.assertTrue(site.check_token(site.plain_token))
+        self.assertFalse(site.token_needs_upgrade())
+
+    def test_rotate_invalidates_old_token(self):
+        site = Site.create("Тест")
+        old = site.plain_token
+        new = site.rotate_token()
+        self.assertNotEqual(old, new)
+        self.assertFalse(site.check_token(old))
+        self.assertTrue(site.check_token(new))
+
+    def test_legacy_site_wants_upgrade(self):
+        site = Site.create("Тест")
+        site.token_hash = "открытый-токен"
+        self.assertTrue(site.token_needs_upgrade())
+        self.assertTrue(site.check_token("открытый-токен"))
+
+
 class SiteTest(unittest.TestCase):
     def test_domains_normalized(self):
         domains = normalize_domains("https://Example.ru/, www.example.ru , example.ru")
@@ -127,7 +175,8 @@ class SiteTest(unittest.TestCase):
     def test_key_and_token_are_unique(self):
         first, second = Site.create("А"), Site.create("Б")
         self.assertNotEqual(first.key, second.key)
-        self.assertNotEqual(first.admin_token, second.admin_token)
+        self.assertNotEqual(first.plain_token, second.plain_token)
+        self.assertNotEqual(first.token_hash, second.token_hash)
 
 
 if __name__ == "__main__":

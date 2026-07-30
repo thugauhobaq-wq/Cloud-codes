@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m widget",
         description="Виджет отзывов для сайта: сервер, кабинет модерации и Telegram-бот.",
     )
-    parser.add_argument("--db", default=str(DEFAULT_DB), help="путь к базе SQLite")
+    # Значения по умолчанию можно задать переменными окружения — так сервис
+    # настраивается в docker-compose без переписывания команды.
+    parser.add_argument("--db", default=os.environ.get("WIDGET_DB") or str(DEFAULT_DB),
+                        help="путь к базе SQLite (WIDGET_DB)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     site = sub.add_parser("site", help="управление сайтами-клиентами")
@@ -57,16 +61,22 @@ def build_parser() -> argparse.ArgumentParser:
     setter.add_argument("--setting", action="append", default=[], metavar="КЛЮЧ=ЗНАЧЕНИЕ",
                         help=f"настройка виджета: {', '.join(sorted(DEFAULT_SETTINGS))}")
 
+    rotate = site_sub.add_parser("rotate-token", help="выдать новый токен админки")
+    rotate.add_argument("--site", required=True)
+
     remove = site_sub.add_parser("rm", help="удалить сайт вместе с отзывами")
     remove.add_argument("--site", required=True)
 
     server = sub.add_parser("serve", help="запустить сервер виджета")
-    server.add_argument("--host", default="127.0.0.1")
-    server.add_argument("--port", type=int, default=8080)
-    server.add_argument("--public-url", default="",
-                        help="внешний адрес, если сервер стоит за прокси")
-    server.add_argument("--dashboard-db", default="",
-                        help="база reviews-dashboard: включает импорт с площадок в кабинете")
+    server.add_argument("--host", default=os.environ.get("WIDGET_HOST") or "127.0.0.1",
+                        help="WIDGET_HOST")
+    server.add_argument("--port", type=int, default=int(os.environ.get("WIDGET_PORT") or 8080),
+                        help="WIDGET_PORT")
+    server.add_argument("--public-url", default=os.environ.get("WIDGET_PUBLIC_URL", ""),
+                        help="внешний адрес, если сервер стоит за прокси (WIDGET_PUBLIC_URL)")
+    server.add_argument("--dashboard-db", default=os.environ.get("WIDGET_DASHBOARD_DB", ""),
+                        help="база reviews-dashboard: включает импорт с площадок "
+                             "в кабинете (WIDGET_DASHBOARD_DB)")
 
     bot = sub.add_parser("bot", help="Telegram-бот, собирающий отзывы")
     bot.add_argument("--site", help="ключ сайта; без него — все сайты с токеном")
@@ -115,23 +125,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 # ------------------------------------------------------------------ вывод
 
-def embed_line(site: Site, base: str = "http://localhost:8080") -> str:
-    return f'<script src="{base}/w/{site.key}.js" async></script>'
+def base_url() -> str:
+    """Адрес сервера для подсказок в консоли: на боевом он задан env, а не localhost."""
+    return (os.environ.get("WIDGET_PUBLIC_URL") or "http://localhost:8080").rstrip("/")
+
+
+def embed_line(site: Site, base: str | None = None) -> str:
+    return f'<script src="{base or base_url()}/w/{site.key}.js" async></script>'
 
 
 def print_site(site: Site, storage: Storage, with_token: bool = False) -> None:
     counts = storage.counts(site.key)
+    base = base_url()
     print(f"{site.name}")
     print(f"  ключ:        {site.key}")
-    if with_token:
-        print(f"  токен:       {site.admin_token}")
+    if with_token and site.plain_token:
+        print(f"  токен:       {site.plain_token}")
     print(f"  домены:      {', '.join(site.domains) or 'любые'}")
     print(f"  автопубликация: {'да' if site.auto_approve else 'нет'}"
           f" (от {site.auto_approve_from}★)")
     print(f"  отзывы:      {counts['published']} опубликовано, {counts['pending']} на модерации")
-    print(f"  вставка:     {embed_line(site)}")
-    print(f"  форма:       http://localhost:8080/f/{site.key}")
-    print(f"  админка:     http://localhost:8080/admin?site={site.key}")
+    print(f"  вставка:     {embed_line(site, base)}")
+    print(f"  форма:       {base}/f/{site.key}")
+    print(f"  админка:     {base}/admin?site={site.key}")
 
 
 # --------------------------------------------------------------- импорт
@@ -220,7 +236,17 @@ def cmd_site(args: argparse.Namespace, storage: Storage) -> int:
         return 1
 
     if args.site_command == "show":
-        print_site(site, storage, with_token=True)
+        print_site(site, storage)
+        print("\nТокен в базе лежит хешем и показать его повторно нельзя.")
+        print(f"Если он потерян — выдайте новый: "
+              f"python -m widget site rotate-token --site {site.key}")
+        return 0
+
+    if args.site_command == "rotate-token":
+        token = site.rotate_token()
+        storage.update_site(site.key, token_hash=site.token_hash)
+        print(f"Новый токен для «{site.name}»:\n\n  {token}\n")
+        print("Старый больше не работает. Токен показывается один раз — сохраните его.")
         return 0
 
     if args.site_command == "rm":
@@ -296,7 +322,7 @@ def cmd_pull(args: argparse.Namespace, storage: Storage, site: Site) -> int:
     if stats["flagged"]:
         print(f"Помечено антиспамом (только на модерацию): {stats['flagged']}")
     if stats["added"] and not args.publish:
-        print(f"\nОтзывы ждут проверки: http://localhost:8080/admin?site={site.key}")
+        print(f"\nОтзывы ждут проверки: {base_url()}/admin?site={site.key}")
     return 0
 
 
@@ -353,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "demo":
             added = storage.add_many(generate(site.key, count=args.count, seed=args.seed))
             print(f"Добавлено демо-отзывов: {added}")
-            print(f"Смотреть: http://localhost:8080/preview/{site.key}")
+            print(f"Смотреть: {base_url()}/preview/{site.key}")
             return 0
 
         if args.command == "pull":

@@ -1,0 +1,39 @@
+# Запуск без docker: systemd-юнит для сервера виджета.
+#
+#   sudo cp deploy/reviews-widget.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now reviews-widget
+#
+# Перед этим завести пользователя и положить код:
+#   sudo useradd --system --home /opt/reviews-widget widget
+#   sudo git clone <репозиторий> /opt/reviews-widget
+
+[Unit]
+Description=Виджет отзывов для сайта
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=widget
+Group=widget
+WorkingDirectory=/opt/reviews-widget/reviews-widget
+Environment=WIDGET_DB=/var/lib/reviews-widget/widget.db
+Environment=WIDGET_HOST=127.0.0.1
+Environment=WIDGET_PORT=8080
+Environment=WIDGET_PUBLIC_URL=https://widgets.example.ru
+# Раскомментируйте, если рядом стоит reviews-dashboard:
+# Environment=WIDGET_DASHBOARD_DB=/opt/reviews-widget/reviews-dashboard/data/reviews.db
+ExecStart=/usr/bin/python3 -m widget serve
+Restart=always
+RestartSec=3
+
+# Сервису нужен ровно один каталог на запись — тот, где лежит база.
+StateDirectory=reviews-widget
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/reviews-widget
+
+[Install]
+WantedBy=multi-user.target

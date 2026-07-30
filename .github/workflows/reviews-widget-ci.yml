@@ -41,6 +41,11 @@ jobs:
           curl -sf "http://127.0.0.1:8099/api/v1/widget?site=$KEY" | grep -q '"reviews"'
           curl -sf "http://127.0.0.1:8099/f/$KEY" | grep -q "Отзыв"
 
+      - name: Сборка docker-образа
+        # Собираем без запуска: образ должен оставаться собираемым, даже если
+        # никто локально его давно не трогал.
+        run: docker build -t reviews-widget:ci .
+
       - name: Импорт отзывов с площадок из reviews-dashboard
         # Дашборд лежит в этом же репозитории и умеет набивать базу офлайн,
         # так что связку двух проектов можно проверить без сети.
@@ -54,3 +59,49 @@ jobs:
           python -m widget --db /tmp/ci.db pull --site "$KEY" --list | grep -q "Яндекс.Карты"
           python -m widget --db /tmp/ci.db pull --site "$KEY" --min-rating 4 --publish \
             | grep -qE "Добавлено: [1-9]"
+
+  browser:
+    # Отдельной джобой: виджет исполняется на чужой странице, и половина
+    # его багов видна только в настоящем браузере. Единственное место в
+    # проекте с внешней зависимостью — сам виджет по-прежнему без них.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Установить Playwright
+        working-directory: reviews-widget/tests/browser
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Поднять сервер с демо-данными
+        run: |
+          python -m widget --db /tmp/browser.db site add --name "Смоук" --demo
+          python -m widget --db /tmp/browser.db site add --name "Пустой"
+          python -m widget --db /tmp/browser.db site list \
+            | awk '/ключ:/ {print $2}' > /tmp/keys.txt
+          KEY=$(head -1 /tmp/keys.txt)
+          EMPTY=$(tail -1 /tmp/keys.txt)
+          # Токен показывается один раз, поэтому просто выдаём новый.
+          TOKEN=$(python -m widget --db /tmp/browser.db site rotate-token --site "$KEY" \
+                  | awk 'NF==1 && /^  /{print $1}')
+          echo "WIDGET_KEY=$KEY"     >> $GITHUB_ENV
+          echo "WIDGET_TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "WIDGET_EMPTY_KEY=$EMPTY" >> $GITHUB_ENV
+          python -m widget --db /tmp/browser.db serve --port 8099 &
+          for _ in $(seq 20); do
+            curl -sf http://127.0.0.1:8099/healthz && break
+            sleep 1
+          done
+
+      - name: Браузерный смоук
+        working-directory: reviews-widget/tests/browser
+        run: node smoke.mjs http://127.0.0.1:8099 "$WIDGET_KEY" "$WIDGET_TOKEN"
