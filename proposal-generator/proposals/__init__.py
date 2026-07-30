@@ -4,8 +4,9 @@
 собирается кодом из пакета `proposals.pdf`.
 """
 
-from .models import LineItem, Party, Proposal, Section
+from . import invoice
+from .models import Bank, LineItem, Party, Proposal, Section
 from .template import render
 
-__all__ = ["LineItem", "Party", "Proposal", "Section", "render"]
+__all__ = ["Bank", "LineItem", "Party", "Proposal", "Section", "invoice", "render"]
 __version__ = "0.1.0"

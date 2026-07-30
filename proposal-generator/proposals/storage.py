@@ -122,6 +122,8 @@ class DraftInfo:
     sent_at: str
     viewed_at: str
     decided_at: str
+    silent_days: int | None
+    """Сколько суток заказчик молчит; `None` — отсчёт не идёт."""
 
     def to_dict(self) -> dict:
         return {
@@ -137,6 +139,7 @@ class DraftInfo:
             "sent_at": self.sent_at,
             "viewed_at": self.viewed_at,
             "decided_at": self.decided_at,
+            "silent_days": self.silent_days,
         }
 
 
@@ -182,6 +185,7 @@ class Drafts:
                     sent_at=delivery.sent_at.isoformat() if delivery.sent_at else "",
                     viewed_at=delivery.viewed_at.isoformat() if delivery.viewed_at else "",
                     decided_at=delivery.decided_at.isoformat() if delivery.decided_at else "",
+                    silent_days=delivery.silent_days(),
                 )
             )
         found.sort(key=lambda info: info.updated_at, reverse=True)

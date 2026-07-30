@@ -29,6 +29,50 @@ def _text(value: object) -> str:
     return str(value).strip() if value is not None else ""
 
 
+def _digits(value: object) -> str:
+    """Номера счетов и ИНН приходят с пробелами из платёжек — чистим."""
+    return "".join(char for char in _text(value) if char.isdigit())
+
+
+@dataclass(slots=True)
+class Bank:
+    """Банковские реквизиты — то, без чего счёт не оплатят.
+
+    Отдельными полями, а не свободным текстом: в шапке счёта у каждого своя
+    клетка, и бухгалтер ищет их глазами всегда на одном месте.
+    """
+
+    name: str = ""
+    """Название банка."""
+    bik: str = ""
+    account: str = ""
+    """Расчётный счёт получателя."""
+    corr_account: str = ""
+    """Корреспондентский счёт банка."""
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> Bank:
+        return cls(
+            name=_text(raw.get("name")),
+            bik=_digits(raw.get("bik")),
+            account=_digits(raw.get("account")),
+            corr_account=_digits(raw.get("corr_account")),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "bik": self.bik,
+            "account": self.account,
+            "corr_account": self.corr_account,
+        }
+
+    @property
+    def filled(self) -> bool:
+        """Хватает ли данных, чтобы платёж вообще прошёл."""
+        return bool(self.name and self.bik and self.account)
+
+
 @dataclass(slots=True)
 class Party:
     """Сторона предложения: исполнитель или заказчик."""
@@ -42,7 +86,10 @@ class Party:
     site: str = ""
     address: str = ""
     details: str = ""
-    """Реквизиты: ИНН, ОГРН, расчётный счёт — свободным текстом."""
+    """Прочие реквизиты свободным текстом: ОГРН, номер договора."""
+    inn: str = ""
+    kpp: str = ""
+    bank: Bank = field(default_factory=Bank)
     logo: bytes | None = None
 
     @classmethod
@@ -56,6 +103,9 @@ class Party:
             site=_text(raw.get("site")),
             address=_text(raw.get("address")),
             details=_text(raw.get("details")),
+            inn=_digits(raw.get("inn")),
+            kpp=_digits(raw.get("kpp")),
+            bank=Bank.from_dict(raw.get("bank") or {}),
         )
 
     def to_dict(self) -> dict:
@@ -68,12 +118,30 @@ class Party:
             "site": self.site,
             "address": self.address,
             "details": self.details,
+            "inn": self.inn,
+            "kpp": self.kpp,
+            "bank": self.bank.to_dict(),
         }
 
     @property
     def contacts(self) -> list[str]:
         """Контакты одной строкой каждый — для шапки и подвала."""
         return [value for value in (self.phone, self.email, self.site) if value]
+
+    @property
+    def tax_line(self) -> str:
+        """«ИНН 7712345678, КПП 771201001» — как принято писать в счёте."""
+        parts = []
+        if self.inn:
+            parts.append(f"ИНН {self.inn}")
+        if self.kpp:
+            parts.append(f"КПП {self.kpp}")
+        return ", ".join(parts)
+
+    def full_line(self) -> str:
+        """Строка «Покупатель»/«Поставщик» счёта: реквизиты, имя, адрес."""
+        parts = [value for value in (self.tax_line, self.name, self.address) if value]
+        return ", ".join(parts)
 
 
 @dataclass(slots=True)

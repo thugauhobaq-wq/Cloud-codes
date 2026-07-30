@@ -53,3 +53,8 @@ jobs:
               --public-url https://kp.example.test --dry-run | tee /tmp/letter.txt
           grep -q 'https://kp.example.test/p/' /tmp/letter.txt
           python -m proposals --data /tmp/kp status
+
+      - name: Собрать счёт
+        run: |
+          python -m proposals --data /tmp/kp invoice romashka --out /tmp/schet.pdf
+          head -c 8 /tmp/schet.pdf | grep -q '%PDF' && echo "счёт на месте"

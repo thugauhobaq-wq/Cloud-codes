@@ -49,8 +49,16 @@ EVENT_LABELS = {
     "viewed": "открыто по ссылке",
     "accepted": "заказчик принял",
     "declined": "заказчик хочет обсудить",
+    "reminded": "отправлено напоминание",
     "reset": "возвращено в черновики",
 }
+
+
+def _int(value: object) -> int:
+    try:
+        return max(int(str(value or 0)), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def now() -> datetime:
@@ -120,6 +128,8 @@ class Delivery:
     decided_at: datetime | None = None
     comment: str = ""
     """Что заказчик написал, нажимая «принять» или «обсудить»."""
+    reminded_at: datetime | None = None
+    reminders: int = 0
     events: list[Event] = field(default_factory=list)
 
     @classmethod
@@ -134,6 +144,8 @@ class Delivery:
             viewed_at=parse_time(raw.get("viewed_at")),
             decided_at=parse_time(raw.get("decided_at")),
             comment=str(raw.get("comment") or ""),
+            reminded_at=parse_time(raw.get("reminded_at")),
+            reminders=_int(raw.get("reminders")),
             events=[
                 Event.from_dict(item)
                 for item in raw.get("events") or []
@@ -150,6 +162,8 @@ class Delivery:
             "viewed_at": self.viewed_at.isoformat() if self.viewed_at else "",
             "decided_at": self.decided_at.isoformat() if self.decided_at else "",
             "comment": self.comment,
+            "reminded_at": self.reminded_at.isoformat() if self.reminded_at else "",
+            "reminders": self.reminders,
             "events": [event.to_dict() for event in self.events],
         }
 
@@ -227,9 +241,38 @@ class Delivery:
         self.status = DRAFT
         self.token = ""
         self.recipient = ""
-        self.sent_at = self.viewed_at = self.decided_at = None
+        self.sent_at = self.viewed_at = self.decided_at = self.reminded_at = None
         self.comment = ""
+        self.reminders = 0
         self.events.append(Event("reset"))
+
+    def mark_reminded(self) -> None:
+        self.reminded_at = now()
+        self.reminders += 1
+        self.events.append(Event("reminded", detail=self.recipient))
+
+    @property
+    def waiting_since(self) -> datetime | None:
+        """С какого момента идёт отсчёт молчания.
+
+        Если напоминание уже отправляли, считаем от него, а не от первого
+        письма, — иначе одно и то же предложение будет «просрочено» вечно и
+        напоминания посыплются каждый день.
+        """
+        if self.status not in (SENT, VIEWED):
+            return None
+        return self.reminded_at or self.sent_at
+
+    def silent_days(self, at: datetime | None = None) -> int | None:
+        """Сколько полных суток заказчик молчит. `None` — отсчёт не идёт."""
+        since = self.waiting_since
+        if since is None:
+            return None
+        return max(((at or now()) - since).days, 0)
+
+    def needs_reminder(self, after_days: int, at: datetime | None = None) -> bool:
+        days = self.silent_days(at)
+        return days is not None and days >= max(after_days, 0)
 
     def link(self, base_url: str) -> str:
         """Публичная ссылка на предложение."""

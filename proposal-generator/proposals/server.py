@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import delivery as delivery_module
+from . import invoice as invoice_module
 from . import mailer, storage
 from .delivery import Delivery
 from .mailer import MailError, SmtpConfig
@@ -118,8 +119,12 @@ class Handler(BaseHTTPRequestHandler):
         match path:
             case "/api/render":
                 self._render(payload)
+            case "/api/invoice":
+                self._invoice(payload)
             case "/api/send":
                 self._send_proposal(payload)
+            case "/api/remind":
+                self._remind(payload)
             case "/api/smtp":
                 self._save_smtp(payload)
             case _ if path.startswith("/api/drafts/"):
@@ -328,6 +333,83 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _invoice(self, payload: dict) -> None:
+        """Счёт по тем же данным. Берём сохранённое, если черновик известен."""
+        slug = str(payload.get("slug") or "").strip()
+        if slug:
+            try:
+                proposal = self.drafts.read(slug).proposal
+            except StorageError:
+                self._send_json({"error": "черновик не найден"}, HTTPStatus.NOT_FOUND)
+                return
+        else:
+            proposal = storage.from_json(payload).proposal
+
+        try:
+            data, warnings = invoice_module.render(
+                proposal,
+                number=str(payload.get("number") or ""),
+                family=self.family,
+            )
+        except (FontError, ValueError) as error:
+            self._send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        name = proposal.filename.replace("KP-", "Schet-", 1)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Disposition", f'inline; filename="{name}"')
+        if warnings:
+            self.send_header("X-Proposal-Warnings", quote("; ".join(warnings)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _remind(self, payload: dict) -> None:
+        slug = str(payload.get("slug") or "").strip()
+        if not slug:
+            self._send_json({"error": "не указан черновик"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            record = self.drafts.read(slug)
+        except StorageError:
+            self._send_json({"error": "черновик не найден"}, HTTPStatus.NOT_FOUND)
+            return
+
+        try:
+            pdf, _ = render(record.proposal, family=self.family)
+        except (FontError, ValueError) as error:
+            self._send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        dry_run = bool(payload.get("dry_run"))
+        try:
+            message = mailer.remind(
+                self._smtp_config(),
+                record.proposal,
+                record.delivery,
+                pdf,
+                base_url=self.public_url,
+                subject=str(payload.get("subject") or ""),
+                body=str(payload.get("body") or ""),
+                dry_run=dry_run,
+            )
+        except MailError as error:
+            self._send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not dry_run:
+            self.drafts.write(slug, record)
+        self._send_json(
+            {
+                "dry_run": dry_run,
+                "to": message["To"],
+                "subject": message["Subject"],
+                "body": message.get_body(("plain",)).get_content(),
+                "reminders": record.delivery.reminders,
+            }
+        )
+
     def _send_proposal(self, payload: dict) -> None:
         """Отправить сохранённый черновик письмом.
 
@@ -434,6 +516,7 @@ class Handler(BaseHTTPRequestHandler):
             {**event.to_dict(), "label": event.label} for event in record.delivery.events
         ]
         raw["delivery"]["status_label"] = record.delivery.label
+        raw["delivery"]["silent_days"] = record.delivery.silent_days()
         raw["delivery"].pop("token", None)  # форме токен не нужен
         self._send_json(raw)
 

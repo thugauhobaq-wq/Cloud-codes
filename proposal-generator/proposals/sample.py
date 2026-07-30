@@ -10,7 +10,7 @@ import struct
 import zlib
 from datetime import date
 
-from .models import VAT_NONE, LineItem, Party, Proposal, Section
+from .models import VAT_NONE, Bank, LineItem, Party, Proposal, Section
 
 
 def demo_logo(text: str = "ТУ", color: tuple[int, int, int] = (32, 94, 255)) -> bytes:
@@ -133,7 +133,16 @@ def demo_proposal(today: date | None = None) -> Proposal:
             phone="+7 999 123-45-67",
             email="hello@tihiy-ugol.ru",
             site="tihiy-ugol.ru",
-            details="ИП Северова А. В., ИНН 771234567890",
+            details="ИП Северова Анна Владимировна, ОГРНИП 321774600123456",
+            inn="771234567890",
+            # Реквизиты в примере настоящие по форме, но выдуманные по содержанию:
+            # так «proposals invoice» работает сразу после установки.
+            bank=Bank(
+                name="АО «Тестовый Банк», г. Москва",
+                bik="044525974",
+                account="40802810100000001234",
+                corr_account="30101810145250000974",
+            ),
         ),
         client=Party(
             name="ООО «Ромашка»",
@@ -141,6 +150,8 @@ def demo_proposal(today: date | None = None) -> Proposal:
             position="Коммерческий директор",
             email="lapin@romashka.example",
             address="г. Казань, ул. Баумана, 12, офис 305",
+            inn="1655123456",
+            kpp="165501001",
         ),
         items=[
             LineItem(

@@ -141,15 +141,24 @@ function readSections() {
 /* --- состояние -------------------------------------------------------------- */
 
 function collect() {
+  const field = (name) => $(name)?.value || '';
   const party = (prefix) => ({
-    name: $(`${prefix}.name`).value,
-    person: $(`${prefix}.person`).value,
-    position: $(`${prefix}.position`).value,
-    phone: $(`${prefix}.phone`)?.value || '',
-    email: $(`${prefix}.email`)?.value || '',
-    site: $(`${prefix}.site`)?.value || '',
-    address: $(`${prefix}.address`).value,
-    details: $(`${prefix}.details`).value,
+    name: field(`${prefix}.name`),
+    person: field(`${prefix}.person`),
+    position: field(`${prefix}.position`),
+    phone: field(`${prefix}.phone`),
+    email: field(`${prefix}.email`),
+    site: field(`${prefix}.site`),
+    address: field(`${prefix}.address`),
+    details: field(`${prefix}.details`),
+    inn: field(`${prefix}.inn`),
+    kpp: field(`${prefix}.kpp`),
+    bank: {
+      name: field(`${prefix}.bank.name`),
+      bik: field(`${prefix}.bank.bik`),
+      account: field(`${prefix}.bank.account`),
+      corr_account: field(`${prefix}.bank.corr_account`),
+    },
     logo: logos[prefix] || '',
   });
 
@@ -197,8 +206,11 @@ function apply(data) {
 
   for (const prefix of ['sender', 'client']) {
     const party = data[prefix] || {};
-    for (const field of ['name', 'person', 'position', 'phone', 'email', 'site', 'address', 'details']) {
-      set(`${prefix}.${field}`, party[field]);
+    for (const name of ['name', 'person', 'position', 'phone', 'email', 'site', 'address', 'details', 'inn', 'kpp']) {
+      set(`${prefix}.${name}`, party[name]);
+    }
+    for (const name of ['name', 'bik', 'account', 'corr_account']) {
+      set(`${prefix}.bank.${name}`, (party.bank || {})[name]);
     }
     setLogo(prefix, party.logo ? asDataUrl(party.logo) : null);
   }
@@ -396,6 +408,42 @@ function download(button) {
 document.getElementById('download').addEventListener('click', (e) => download(e.target));
 document.getElementById('download2').addEventListener('click', (e) => download(e.target));
 
+document.getElementById('downloadInvoice').addEventListener('click', (event) => withBusy(event.target, async () => {
+  // Если черновик сохранён, счёт считаем по нему — как и письмо.
+  const payload = currentSlug ? { slug: currentSlug } : collect();
+  const response = await fetch('/api/invoice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(problem.error || `сервер ответил ${response.status}`);
+  }
+  const warnings = response.headers.get('X-Proposal-Warnings');
+  if (warnings) show(decodeURIComponent(warnings), 'warn');
+
+  const name = (response.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name ? name[1] : 'schet.pdf';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}));
+
+document.getElementById('remind').addEventListener('click', (event) => withBusy(event.target, async () => {
+  const response = await fetch('/api/remind', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug: currentSlug }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'не отправилось');
+  show(`Напоминание отправлено на ${result.to}.`);
+  await Promise.all([loadDelivery(), refreshDrafts()]);
+}));
+
 document.getElementById('preview').addEventListener('click', (event) => withBusy(event.target, async () => {
   const { blob } = await buildPdf();
   if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -514,8 +562,20 @@ function applyDelivery(state) {
     sendState.textContent = 'Ещё не отправляли.';
     sendState.dataset.status = 'draft';
   } else {
-    sendState.textContent = `${capitalize(state.status_label)}${state.comment ? `: «${state.comment}»` : ''}`;
+    const days = state.silent_days ? `, ждём ответа ${state.silent_days} дн.` : '';
+    const comment = state.comment ? `: «${state.comment}»` : '';
+    sendState.textContent = `${capitalize(state.status_label)}${days}${comment}`;
     sendState.dataset.status = state.status;
+  }
+
+  const remindButton = document.getElementById('remind');
+  const silent = state ? state.silent_days : null;
+  const waiting = state && (state.status === 'sent' || state.status === 'viewed');
+  remindButton.hidden = !waiting;
+  if (waiting) {
+    remindButton.textContent = silent
+      ? `Напомнить — молчит ${silent} дн.`
+      : 'Напомнить';
   }
 
   if (state && state.link) {
