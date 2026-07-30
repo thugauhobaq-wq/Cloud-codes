@@ -1,0 +1,40 @@
+name: reviews-widget CI
+
+on:
+  push:
+    paths:
+      - 'reviews-widget/**'
+      - '.github/workflows/reviews-widget-ci.yml'
+  pull_request:
+    paths:
+      - 'reviews-widget/**'
+      - '.github/workflows/reviews-widget-ci.yml'
+
+defaults:
+  run:
+    working-directory: reviews-widget
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Тесты
+        # Зависимостей нет, сеть не нужна: HTTP проверяется на настоящем
+        # сервере, поднятом на случайном порту.
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Проверка сценария «завести сайт и отдать виджет»
+        run: |
+          python -m widget --db /tmp/ci.db site add --name "CI" --demo
+          KEY=$(python -m widget --db /tmp/ci.db site list | awk '/ключ:/ {print $2}')
+          python -m widget --db /tmp/ci.db serve --port 8099 &
+          sleep 3
+          curl -sf "http://127.0.0.1:8099/w/$KEY.js" | grep -q attachShadow
+          curl -sf "http://127.0.0.1:8099/api/v1/widget?site=$KEY" | grep -q '"reviews"'
+          curl -sf "http://127.0.0.1:8099/f/$KEY" | grep -q "Отзыв"
