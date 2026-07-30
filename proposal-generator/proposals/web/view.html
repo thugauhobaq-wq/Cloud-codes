@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Коммерческое предложение</title>
+  <link rel="stylesheet" href="/view.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📄</text></svg>">
+</head>
+<body>
+<main class="page" id="page" hidden>
+  <header class="head">
+    <p class="from" id="from"></p>
+    <h1 id="title">Коммерческое предложение</h1>
+    <p class="meta" id="meta"></p>
+  </header>
+
+  <section class="card summary">
+    <div class="summary__row">
+      <span>Итого к оплате</span>
+      <strong id="total"></strong>
+    </div>
+    <p class="vat" id="vat"></p>
+    <ul class="items" id="items"></ul>
+  </section>
+
+  <section class="card doc">
+    <div class="doc__bar">
+      <h2>Документ</h2>
+      <a class="btn btn--ghost" id="download" href="" download>Скачать PDF</a>
+    </div>
+    <iframe id="pdf" title="Коммерческое предложение" src=""></iframe>
+  </section>
+
+  <section class="card decide" id="decide">
+    <h2>Что решаем?</h2>
+    <p class="muted">Ответ увидит отправитель — писать отдельное письмо не нужно.</p>
+    <label>Комментарий <span class="muted">— по желанию</span>
+      <textarea id="comment" rows="3" placeholder="Например: готовы начать с 10 числа, но хотим убрать третий пункт"></textarea>
+    </label>
+    <div class="decide__buttons">
+      <button type="button" class="btn btn--primary" id="accept">Принимаю предложение</button>
+      <button type="button" class="btn" id="discuss">Хочу обсудить</button>
+    </div>
+  </section>
+
+  <section class="card done" id="done" hidden>
+    <h2 id="doneTitle"></h2>
+    <p class="muted" id="doneText"></p>
+    <button type="button" class="btn btn--ghost" id="change">Изменить ответ</button>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<p class="loading" id="loading">Загружаем предложение…</p>
+
+<script src="/view.js"></script>
+</body>
+</html>

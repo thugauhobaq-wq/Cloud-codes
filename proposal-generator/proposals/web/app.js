@@ -14,6 +14,9 @@ const previewFrame = document.getElementById('previewFrame');
 const logos = { sender: null, client: null };
 let previewUrl = null;
 let bannerTimer = null;
+/** Какой черновик открыт: отправлять можно только сохранённое. */
+let currentSlug = '';
+let publicUrl = '';
 
 const CURRENCIES = {
   RUB: '₽', USD: '$', EUR: '€', KZT: '₸', BYN: 'Br', UAH: '₴',
@@ -206,6 +209,10 @@ function apply(data) {
 
   sectionsBox.innerHTML = '';
   (data.sections || []).forEach(addSection);
+
+  // Адрес для отправки подставляем из карточки заказчика — почти всегда он же.
+  const sendTo = document.getElementById('sendTo');
+  if (sendTo && !sendTo.value) sendTo.value = (data.client || {}).email || '';
 
   applyAccent();
   recalc();
@@ -401,6 +408,8 @@ document.getElementById('preview').addEventListener('click', (event) => withBusy
 document.getElementById('loadDemo').addEventListener('click', (event) => withBusy(event.target, async () => {
   const response = await fetch('/api/demo');
   apply(await response.json());
+  currentSlug = '';
+  applyDelivery(null);
   show('Загружен пример — правьте под себя.');
 }));
 
@@ -416,8 +425,9 @@ document.getElementById('saveDraft').addEventListener('click', (event) => withBu
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'не сохранилось');
+  currentSlug = slug;
   show(`Черновик «${slug}» сохранён.`);
-  await refreshDrafts();
+  await Promise.all([refreshDrafts(), loadDelivery()]);
 }));
 
 function suggestSlug() {
@@ -436,6 +446,7 @@ async function refreshDrafts() {
   const { drafts } = await response.json();
   const list = document.getElementById('drafts');
   list.innerHTML = '';
+  refreshFunnel();
   if (!drafts.length) {
     list.innerHTML = '<li class="muted">Пока пусто. Сохранённые предложения лягут сюда.</li>';
     return;
@@ -450,14 +461,22 @@ async function refreshDrafts() {
     open.addEventListener('click', async () => {
       const loaded = await fetch(`/api/drafts/${encodeURIComponent(draft.slug)}`);
       if (!loaded.ok) { show('Черновик не открылся.', 'error'); return; }
-      apply(await loaded.json());
+      const data = await loaded.json();
+      apply(data);
+      currentSlug = draft.slug;
       document.getElementById('draftSlug').value = draft.slug;
+      applyDelivery(data.delivery);
       show(`Открыт черновик «${draft.slug}».`);
     });
 
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.dataset.status = draft.status;
+    tag.textContent = draft.status_label;
+
     const when = document.createElement('span');
     when.className = 'when';
-    when.textContent = draft.updated_at.slice(0, 10).split('-').reverse().join('.');
+    when.textContent = draft.total;
 
     const drop = document.createElement('button');
     drop.type = 'button';
@@ -470,10 +489,178 @@ async function refreshDrafts() {
       await refreshDrafts();
     });
 
-    item.append(open, when, drop);
+    item.append(open, tag, when, drop);
     list.append(item);
   }
 }
+
+/* --- отправка и воронка ----------------------------------------------------- */
+
+const sendState = document.getElementById('sendState');
+const sendHint = document.getElementById('sendHint');
+
+/** Показать состояние доставки открытого черновика. */
+function applyDelivery(state) {
+  const events = document.getElementById('events');
+  events.innerHTML = '';
+
+  if (!currentSlug) {
+    sendState.textContent = 'Сначала сохраните черновик — отправляем именно сохранённое.';
+    sendState.dataset.status = 'draft';
+    sendHint.textContent = '';
+    return;
+  }
+  if (!state || state.status === 'draft') {
+    sendState.textContent = 'Ещё не отправляли.';
+    sendState.dataset.status = 'draft';
+  } else {
+    sendState.textContent = `${capitalize(state.status_label)}${state.comment ? `: «${state.comment}»` : ''}`;
+    sendState.dataset.status = state.status;
+  }
+
+  if (state && state.link) {
+    sendHint.innerHTML = '';
+    sendHint.append('Ссылка для заказчика: ');
+    const link = document.createElement('a');
+    link.href = state.link;
+    link.textContent = state.link;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    sendHint.append(link);
+  } else if (!publicUrl) {
+    sendHint.textContent = 'Публичный адрес не задан: письмо уйдёт без ссылки, статусы «просмотрено» и «принято» отмечаться не будут.';
+  } else {
+    sendHint.textContent = '';
+  }
+
+  for (const event of (state && state.events) || []) {
+    const row = document.createElement('li');
+    const when = document.createElement('time');
+    when.textContent = new Date(event.at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+    const what = document.createElement('span');
+    what.textContent = event.detail ? `${event.label} — ${event.detail}` : event.label;
+    row.append(when, what);
+    events.append(row);
+  }
+}
+
+const capitalize = (text) => (text ? text[0].toUpperCase() + text.slice(1) : '');
+
+async function loadDelivery() {
+  if (!currentSlug) { applyDelivery(null); return; }
+  const response = await fetch(`/api/drafts/${encodeURIComponent(currentSlug)}`);
+  if (!response.ok) { applyDelivery(null); return; }
+  const data = await response.json();
+  applyDelivery(data.delivery);
+}
+
+async function callSend(dryRun) {
+  const response = await fetch('/api/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      slug: currentSlug,
+      to: document.getElementById('sendTo').value,
+      subject: document.getElementById('sendSubject').value,
+      body: document.getElementById('sendBody').value,
+      dry_run: dryRun,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `сервер ответил ${response.status}`);
+  return result;
+}
+
+document.getElementById('previewMail').addEventListener('click', (event) => withBusy(event.target, async () => {
+  const result = await callSend(true);
+  // Подставляем в поля то, что ушло бы, — дальше это можно править руками.
+  document.getElementById('sendSubject').value = result.subject;
+  document.getElementById('sendBody').value = result.body;
+  document.querySelector('.send-more').open = true;
+  show(`Так уйдёт письмо на ${result.to}. Ничего не отправлено.`);
+  (result.warnings || []).forEach((warning) => show(warning, 'warn'));
+}));
+
+document.getElementById('sendMail').addEventListener('click', (event) => withBusy(event.target, async () => {
+  const to = document.getElementById('sendTo').value || $('client.email').value;
+  if (!confirm(`Отправить предложение на ${to}?`)) return;
+  const result = await callSend(false);
+  show(`Отправлено на ${result.to}.`);
+  (result.warnings || []).forEach((warning) => show(warning, 'warn'));
+  await Promise.all([loadDelivery(), refreshDrafts()]);
+}));
+
+async function refreshFunnel() {
+  const response = await fetch('/api/funnel');
+  if (!response.ok) return;
+  const data = await response.json();
+  const box = document.getElementById('funnel');
+  box.innerHTML = '';
+  if (!data.total) return;
+
+  const rows = [
+    ['Черновики', String(data.counts.draft)],
+    ['Отправлено', String(data.delivered)],
+    ['Просмотрено', String(data.counts.viewed + data.counts.accepted + data.counts.declined)],
+    ['Принято', String(data.counts.accepted), true],
+  ];
+  if (data.delivered) rows.push(['Конверсия', `${data.conversion}%`, true]);
+  for (const [currency, bucket] of Object.entries(data.money || {})) {
+    if (bucket.accepted !== bucket.open) rows.push([`Ждёт ответа (${currency})`, bucket.open]);
+    rows.push([`Принято на сумму`, bucket.accepted, true]);
+  }
+
+  for (const [caption, value, accent] of rows) {
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = caption;
+    dd.textContent = value;
+    if (accent) dd.className = 'accent';
+    box.append(dt, dd);
+  }
+}
+
+/* --- настройки почты -------------------------------------------------------- */
+
+function applySmtp(smtp) {
+  const set = (name, value) => {
+    const field = document.querySelector(`[name="smtp.${name}"]`);
+    if (field && value !== undefined && value !== null && value !== '') field.value = value;
+  };
+  set('host', smtp.host);
+  set('port', smtp.port);
+  set('user', smtp.user);
+  set('sender', smtp.sender);
+  set('ssl_mode', smtp.ssl_mode);
+
+  document.getElementById('smtpSummary').textContent = smtp.configured
+    ? `${smtp.host} — ${smtp.sender}`
+    : 'не настроена — письма отправлять нечем';
+  document.getElementById('smtpBox').open = !smtp.configured;
+}
+
+document.getElementById('saveSmtp').addEventListener('click', (event) => withBusy(event.target, async () => {
+  const value = (name) => document.querySelector(`[name="smtp.${name}"]`).value;
+  const response = await fetch('/api/smtp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      host: value('host'),
+      port: value('port'),
+      user: value('user'),
+      password: value('password'),
+      sender: value('sender'),
+      ssl_mode: value('ssl_mode'),
+      check: true,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'не сохранилось');
+  document.querySelector('[name="smtp.password"]').value = '';
+  applySmtp(result);
+  if (result.check_error) throw new Error(result.check_error);
+  show(result.check || 'Настройки почты сохранены.');
+}));
 
 /* --- оформление ------------------------------------------------------------- */
 
@@ -524,6 +711,10 @@ async function start() {
     ? `шрифт: ${state.font}`
     : 'шрифт не найден';
   if (state.font_error) show(state.font_error, 'error');
+
+  publicUrl = state.public_url || '';
+  applySmtp(state.smtp || {});
+  applyDelivery(null);
 
   $('issued_at').value = new Date().toISOString().slice(0, 10);
   $('number').value = state.next_number || '1';

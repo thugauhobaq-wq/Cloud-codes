@@ -1,0 +1,153 @@
+/* Страница предложения для заказчика. Открывается с телефона из письма,
+   поэтому одна колонка и крупные кнопки. */
+
+:root {
+  --accent: #1f5eff;
+  --ink: #16181d;
+  --muted: #6b7280;
+  --faint: #98a2b3;
+  --line: #e3e6ec;
+  --bg: #eef1f6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.loading {
+  margin: 20vh auto;
+  text-align: center;
+  color: var(--muted);
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 18px 60px;
+}
+
+.head { margin-bottom: 20px; }
+.from { margin: 0 0 6px; color: var(--accent); font-weight: 600; font-size: 14px; }
+.head h1 { margin: 0; font-size: clamp(24px, 6vw, 32px); line-height: 1.2; }
+.meta { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 10px 30px -18px rgba(16, 24, 40, .3);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.muted { color: var(--muted); font-size: 14px; }
+
+/* --- итог --- */
+
+.summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.summary__row span { color: var(--muted); font-size: 14px; }
+.summary__row strong { font-size: clamp(22px, 6vw, 30px); font-variant-numeric: tabular-nums; }
+.vat { margin: 4px 0 0; color: var(--faint); font-size: 13px; }
+
+.items { list-style: none; margin: 16px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); }
+.items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  font-size: 14px;
+}
+.items li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* --- документ --- */
+
+.doc__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.doc__bar h2 { margin: 0; }
+.doc iframe {
+  width: 100%;
+  height: 70vh;
+  min-height: 380px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f8fa;
+}
+
+@media (max-width: 620px) {
+  /* На телефоне встроенный просмотр PDF почти везде бесполезен — прячем. */
+  .doc iframe { display: none; }
+}
+
+/* --- кнопки --- */
+
+.btn {
+  display: inline-block;
+  padding: 11px 18px;
+  font: inherit;
+  font-size: 15px;
+  text-align: center;
+  text-decoration: none;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.btn:hover { background: #f7f8fa; }
+.btn--ghost { font-size: 14px; padding: 8px 14px; }
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn--primary:hover { filter: brightness(.93); }
+.btn[disabled] { opacity: .55; cursor: progress; }
+
+/* --- решение --- */
+
+.decide label { display: block; margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+.decide textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  resize: vertical;
+}
+.decide textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.decide__buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.decide__buttons .btn { flex: 1 1 200px; }
+
+.done h2 { color: var(--ink); font-size: 18px; text-transform: none; letter-spacing: 0; }
+.done .btn { margin-top: 14px; }
+
+.foot { color: var(--faint); font-size: 13px; text-align: center; padding-top: 8px; }
+.foot a { color: inherit; }

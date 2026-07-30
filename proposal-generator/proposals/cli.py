@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from . import storage
+from . import mailer, storage
+from .delivery import summarize
+from .mailer import MailError
 from .models import Proposal
+from .money import format_amount
 from .pdf import FontError, find_family
 from .sample import demo_proposal
 from .storage import DEFAULT_DIR, Drafts, StorageError
@@ -21,12 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--font", default=None,
                         help="путь к .ttf или название семейства (по умолчанию — что найдётся)")
+    parser.add_argument("--data", default=str(DEFAULT_DIR), help="каталог с черновиками")
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="открыть веб-форму в браузере")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
-    serve.add_argument("--data", default=str(DEFAULT_DIR), help="каталог с черновиками")
+    serve.add_argument("--public-url", default="",
+                       help="адрес, по которому заказчик откроет ссылку, например https://kp.студия.рф")
+    serve.add_argument("--key", default="",
+                       help="ключ доступа к форме (нужен, только если --host смотрит наружу)")
 
     render_cmd = sub.add_parser("render", help="собрать PDF из файла черновика")
     render_cmd.add_argument("source", help="путь к .proposal.json или «-» для чтения stdin")
@@ -36,15 +44,37 @@ def build_parser() -> argparse.ArgumentParser:
     render_cmd.add_argument("--accent", default=None, help="акцентный цвет, например #1f5eff")
     render_cmd.add_argument("--template", default=None, choices=sorted(TEMPLATES))
 
+    send = sub.add_parser("send", help="отправить сохранённый черновик заказчику письмом")
+    send.add_argument("slug", help="имя черновика (см. «proposals status»)")
+    send.add_argument("--to", default="", help="адрес получателя, по умолчанию — почта заказчика")
+    send.add_argument("--subject", default="", help="тема письма")
+    send.add_argument("--message", default="", help="текст письма вместо стандартного")
+    send.add_argument("--public-url", default="",
+                      help="адрес сервера, чтобы в письмо попала ссылка на предложение")
+    send.add_argument("--dry-run", action="store_true",
+                      help="показать письмо, ничего не отправляя")
+
+    smtp = sub.add_parser("smtp", help="настройки почты")
+    smtp.add_argument("--host", default=None)
+    smtp.add_argument("--port", type=int, default=None)
+    smtp.add_argument("--user", default=None)
+    smtp.add_argument("--password", default=None,
+                      help="пароль приложения; «-» — прочитать со стандартного ввода")
+    smtp.add_argument("--sender", default=None, help="адрес в поле «От кого»")
+    smtp.add_argument("--sender-name", default=None)
+    smtp.add_argument("--ssl", default=None, choices=("ssl", "starttls", "plain"))
+    smtp.add_argument("--check", action="store_true", help="проверить связь и вход")
+
+    status = sub.add_parser("status", help="воронка: что отправлено, просмотрено и принято")
+    status.add_argument("slug", nargs="?", default=None, help="показать журнал одного предложения")
+
     demo = sub.add_parser("demo", help="сгенерировать пример предложения")
     demo.add_argument("--out", default="demo.pdf")
     demo.add_argument("--json", default=None, help="заодно сохранить черновик в JSON")
     demo.add_argument("--template", default="classic", choices=sorted(TEMPLATES))
     demo.add_argument("--accent", default=None)
 
-    drafts = sub.add_parser("drafts", help="показать сохранённые черновики")
-    drafts.add_argument("--data", default=str(DEFAULT_DIR))
-
+    sub.add_parser("drafts", help="показать сохранённые черновики")
     sub.add_parser("font", help="какой шрифт будет использован")
 
     return parser
@@ -58,6 +88,12 @@ def main(argv: list[str] | None = None) -> int:
                 return _serve(args)
             case "render":
                 return _render(args)
+            case "send":
+                return _send(args)
+            case "smtp":
+                return _smtp(args)
+            case "status":
+                return _status(args)
             case "demo":
                 return _demo(args)
             case "drafts":
@@ -70,23 +106,32 @@ def main(argv: list[str] | None = None) -> int:
     except StorageError as error:
         print(f"Черновик: {error}", file=sys.stderr)
         return 2
+    except MailError as error:
+        print(f"Почта: {error}", file=sys.stderr)
+        return 2
     return 1
 
 
 def _serve(args: argparse.Namespace) -> int:
     from .server import serve
 
-    serve(host=args.host, port=args.port, data_dir=args.data, font=args.font)
+    serve(
+        host=args.host,
+        port=args.port,
+        data_dir=args.data,
+        font=args.font,
+        public_url=args.public_url,
+        admin_token=args.key,
+    )
     return 0
 
 
 def _render(args: argparse.Namespace) -> int:
     if args.source == "-":
-        import json
-
-        proposal = storage.from_json(json.loads(sys.stdin.read()))
+        record = storage.from_json(json.loads(sys.stdin.read()))
     else:
-        proposal = storage.load(args.source)
+        record = storage.load(args.source)
+    proposal = record.proposal
 
     if args.logo_client:
         proposal.client.logo = _read_logo(args.logo_client)
@@ -99,6 +144,153 @@ def _render(args: argparse.Namespace) -> int:
 
     out = Path(args.out) if args.out else Path(proposal.filename)
     return _write(proposal, out, args.font)
+
+
+def _send(args: argparse.Namespace) -> int:
+    drafts = Drafts(args.data)
+    record = drafts.read(args.slug)
+    config = mailer.load_config(args.data)
+
+    for problem in record.proposal.validate():
+        print(f"Предупреждение: {problem}", file=sys.stderr)
+
+    data, warnings = render(record.proposal, font=args.font)
+    for warning in warnings:
+        print(f"Предупреждение: {warning}", file=sys.stderr)
+    if not args.public_url:
+        print(
+            "Предупреждение: без --public-url в письме не будет ссылки, "
+            "а значит не отметятся «просмотрено» и «принято».",
+            file=sys.stderr,
+        )
+
+    message = mailer.deliver(
+        config,
+        record.proposal,
+        record.delivery,
+        data,
+        to=args.to,
+        base_url=args.public_url,
+        subject=args.subject,
+        body=args.message,
+        dry_run=args.dry_run,
+    )
+
+    if args.dry_run:
+        print(f"Кому:  {message['To']}")
+        print(f"Тема:  {message['Subject']}")
+        print(f"Файл:  {record.proposal.filename} ({len(data) / 1024:.0f} КБ)")
+        print("-" * 60)
+        print(message.get_body(("plain",)).get_content().rstrip())
+        print("-" * 60)
+        print("Ничего не отправлено: это пробный прогон.")
+        return 0
+
+    drafts.write(args.slug, record)
+    print(f"Отправлено на {record.delivery.recipient}")
+    link = record.delivery.link(args.public_url) if args.public_url else ""
+    if link:
+        print(f"Ссылка для заказчика: {link}")
+    return 0
+
+
+def _smtp(args: argparse.Namespace) -> int:
+    config = mailer.load_config(args.data)
+    changed = False
+
+    if args.password == "-":
+        args.password = sys.stdin.readline().strip()
+    for field, value in (
+        ("host", args.host),
+        ("port", args.port),
+        ("user", args.user),
+        ("password", args.password),
+        ("sender", args.sender),
+        ("sender_name", args.sender_name),
+        ("ssl_mode", args.ssl),
+    ):
+        if value is not None:
+            setattr(config, field, value)
+            changed = True
+
+    if changed:
+        path = mailer.save_config(config, args.data)
+        print(f"Настройки: {path}")
+
+    print(f"Сервер:     {config.host or '— не задан'}:{config.port} ({config.ssl_mode})")
+    print(f"Логин:      {config.user or '—'}")
+    print(f"От кого:    {config.formatted_sender() or '—'}")
+    print(f"Пароль:     {'задан' if config.password else '— не задан'}")
+
+    if args.check:
+        print(mailer.check(config))
+    elif not config.configured:
+        print("\nЗаполните хотя бы хост и адрес отправителя, например:")
+        print("  python3 -m proposals smtp --host smtp.yandex.ru --user me@yandex.ru \\")
+        print("      --password - --ssl ssl --check")
+    return 0
+
+
+def _status(args: argparse.Namespace) -> int:
+    drafts = Drafts(args.data)
+    if args.slug:
+        return _one_status(drafts, args.slug)
+
+    found = drafts.list()
+    if not found:
+        print(f"В {drafts.directory} предложений нет.")
+        return 0
+
+    width = max(len(info.slug) for info in found)
+    for info in found:
+        label = f"[{info.status_label}]"
+        print(f"{info.slug:<{width}}  {label:<14} № {info.number:<6} "
+              f"{info.total:>16}  {info.client or info.subject or '—'}")
+
+    items = []
+    for info in found:
+        try:
+            record = storage.load(info.path)
+        except StorageError:
+            continue
+        items.append((record.delivery.status, record.proposal.totals().total,
+                      record.proposal.currency))
+    summary = summarize(items)
+    counts = summary["counts"]
+
+    print()
+    print(f"Всего {summary['total']}: черновиков {counts['draft']}, "
+          f"отправлено {summary['delivered']}, просмотрено {counts['viewed']}, "
+          f"принято {counts['accepted']}, отклонено {counts['declined']}")
+    if summary["delivered"]:
+        print(f"Конверсия: {summary['conversion']}%")
+    from decimal import Decimal
+
+    for currency, bucket in summary["money"].items():
+        accepted = format_amount(Decimal(bucket["accepted"]), currency)
+        pending = format_amount(Decimal(bucket["open"]), currency)
+        print(f"Принято на {accepted}, ждёт ответа на {pending}")
+    return 0
+
+
+def _one_status(drafts: Drafts, slug: str) -> int:
+    record = drafts.read(slug)
+    proposal, state = record.proposal, record.delivery
+    print(f"№ {proposal.number} — {proposal.subject or 'без темы'}")
+    print(f"Заказчик:  {proposal.client.name or '—'}")
+    print(f"Сумма:     {format_amount(proposal.totals().total, proposal.currency)}")
+    print(f"Статус:    {state.label}")
+    if state.recipient:
+        print(f"Отправлено: {state.recipient}")
+    if state.comment:
+        print(f"Комментарий заказчика: {state.comment}")
+    if state.events:
+        print("\nЖурнал:")
+        for event in state.events:
+            when = event.at.astimezone().strftime("%d.%m.%Y %H:%M")
+            detail = f" — {event.detail}" if event.detail else ""
+            print(f"  {when}  {event.label}{detail}")
+    return 0
 
 
 def _demo(args: argparse.Namespace) -> int:
