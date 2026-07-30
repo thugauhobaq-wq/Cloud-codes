@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Отзывы — модерация</title>
+<link rel="stylesheet" href="/assets/admin.css">
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <form class="gate-card" id="gateForm">
+    <h1>Кабинет отзывов</h1>
+    <p class="muted">Ключ сайта и токен выдаются командой <code>python -m widget site add</code>.</p>
+    <label class="field"><span>Ключ сайта</span>
+      <input id="gateSite" placeholder="s_1a2b3c4d5e" autocomplete="off" required></label>
+    <label class="field"><span>Токен доступа</span>
+      <input id="gateToken" type="password" autocomplete="off" required></label>
+    <p class="error" id="gateError" hidden></p>
+    <button class="btn primary wide" type="submit">Войти</button>
+  </form>
+</div>
+
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1 id="siteName">—</h1>
+      <span class="muted mono" id="siteKey"></span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab is-on" data-tab="pending">На модерации <b id="cntPending">0</b></button>
+      <button class="tab" data-tab="published">Опубликованные <b id="cntPublished">0</b></button>
+      <button class="tab" data-tab="rejected">Отклонённые <b id="cntRejected">0</b></button>
+      <button class="tab" data-tab="setup">Установка</button>
+      <button class="tab" data-tab="settings">Настройки</button>
+    </nav>
+    <button class="btn ghost" id="logout">Выйти</button>
+  </header>
+
+  <main>
+    <section class="panel" id="listPanel">
+      <div class="list" id="list"></div>
+      <p class="empty" id="empty" hidden>Здесь пока пусто.</p>
+    </section>
+
+    <section class="panel" id="setupPanel" hidden>
+      <h2>Одна строчка на сайт</h2>
+      <p class="muted">Вставьте её туда, где должна появиться карусель — обычно перед
+        закрывающим тегом <code>&lt;/body&gt;</code> или прямо в нужный блок страницы.</p>
+      <pre class="code" id="embedCode"></pre>
+      <button class="btn primary" id="copyEmbed">Скопировать</button>
+
+      <h2>Куда отправлять клиентов за отзывом</h2>
+      <p class="muted">Отдельная страница формы — её можно дать ссылкой, напечатать
+        QR-кодом на чеке или поставить в рассылку.</p>
+      <pre class="code" id="formLink"></pre>
+      <button class="btn" id="copyForm">Скопировать ссылку</button>
+
+      <h2>Как это выглядит</h2>
+      <div class="preview"><iframe id="preview" title="Превью виджета"></iframe></div>
+    </section>
+
+    <section class="panel" id="settingsPanel" hidden>
+      <form id="settingsForm">
+        <div class="cols">
+          <div>
+            <h2>Виджет</h2>
+            <label class="field"><span>Заголовок</span><input name="title" maxlength="120"></label>
+            <label class="field"><span>Тема</span>
+              <select name="theme">
+                <option value="auto">Подстроиться под систему</option>
+                <option value="light">Светлый сайт</option>
+                <option value="dark">Тёмный сайт</option>
+              </select></label>
+            <label class="field"><span>Вид</span>
+              <select name="layout">
+                <option value="carousel">Карусель</option>
+                <option value="grid">Плитка</option>
+              </select></label>
+            <label class="field"><span>Акцентный цвет</span>
+              <input name="accent" type="color"></label>
+            <label class="field"><span>Скругление, px</span>
+              <input name="radius" type="number" min="0" max="32"></label>
+            <label class="field"><span>Минимальная ширина карточки, px</span>
+              <input name="card_min_width" type="number" min="220" max="520"></label>
+          </div>
+          <div>
+            <h2>Поведение</h2>
+            <label class="field"><span>Сколько отзывов показывать</span>
+              <input name="limit" type="number" min="1" max="100"></label>
+            <label class="field"><span>Скрывать отзывы с оценкой ниже</span>
+              <select name="min_rating">
+                <option value="1">показывать все</option>
+                <option value="2">2 звёзд</option>
+                <option value="3">3 звёзд</option>
+                <option value="4">4 звёзд</option>
+                <option value="5">5 звёзд</option>
+              </select></label>
+            <label class="check"><input name="autoplay" type="checkbox"> Автопрокрутка</label>
+            <label class="field"><span>Пауза между прокрутками, мс</span>
+              <input name="interval" type="number" min="2000" max="60000" step="500"></label>
+            <label class="check"><input name="show_summary" type="checkbox">
+              Показывать среднюю оценку</label>
+            <label class="check"><input name="show_form_button" type="checkbox">
+              Кнопка «Оставить отзыв»</label>
+            <label class="field"><span>Текст кнопки</span>
+              <input name="form_button_text" maxlength="120"></label>
+            <label class="check"><input name="seo_schema" type="checkbox">
+              Разметка schema.org для поисковиков</label>
+          </div>
+        </div>
+
+        <h2>Приём отзывов</h2>
+        <div class="cols">
+          <div>
+            <label class="check"><input name="auto_approve" type="checkbox">
+              Публиковать без модерации</label>
+            <label class="field"><span>Автопубликация с оценки</span>
+              <select name="auto_approve_from">
+                <option value="3">3 и выше</option>
+                <option value="4">4 и выше</option>
+                <option value="5">только 5</option>
+              </select></label>
+            <p class="muted small">Подозрительные отзывы всё равно попадут на модерацию —
+              автопубликация не отключает антиспам.</p>
+          </div>
+          <div>
+            <label class="field"><span>Домены, с которых принимаем отзывы</span>
+              <input name="domains" placeholder="example.ru, shop.example.ru"></label>
+            <p class="muted small">Пусто = принимать откуда угодно. Для боевого сайта
+              лучше перечислить домены.</p>
+            <label class="field"><span>Токен Telegram-бота</span>
+              <input name="telegram_token" autocomplete="off" placeholder="123456:AA..."></label>
+            <label class="field"><span>Chat ID для уведомлений</span>
+              <input name="telegram_chat" autocomplete="off" placeholder="123456789"></label>
+          </div>
+        </div>
+
+        <p class="saved" id="saved" hidden>Сохранено</p>
+        <button class="btn primary" type="submit">Сохранить</button>
+      </form>
+    </section>
+  </main>
+</div>
+
+<template id="cardTpl">
+  <article class="card">
+    <div class="card-head">
+      <span class="stars"></span>
+      <span class="badge source"></span>
+      <span class="badge pin" hidden>Закреплён</span>
+      <span class="grow"></span>
+      <time class="muted"></time>
+    </div>
+    <p class="text"></p>
+    <div class="who"><b class="author"></b><span class="muted contact"></span></div>
+    <div class="reply-box" hidden><b>Ответ компании</b><p class="reply-text"></p></div>
+    <div class="actions">
+      <button class="btn ok" data-act="publish">Опубликовать</button>
+      <button class="btn warn" data-act="reject">Отклонить</button>
+      <button class="btn" data-act="pin">Закрепить</button>
+      <button class="btn" data-act="reply">Ответить</button>
+      <button class="btn danger" data-act="delete">Удалить</button>
+    </div>
+  </article>
+</template>
+
+<script src="/assets/admin.js"></script>
+</body>
+</html>

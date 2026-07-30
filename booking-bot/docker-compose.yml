@@ -1,0 +1,19 @@
+services:
+  booking:
+    build: .
+    container_name: booking-bot
+    # Пропущенный час — это неотправленные напоминания и потерянные записи,
+    # поэтому сервис должен пережить и падение, и перезагрузку сервера.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # База с записями и расписанием живёт вне контейнера, иначе обновление
+      # образа стирало бы весь календарь.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/booking.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

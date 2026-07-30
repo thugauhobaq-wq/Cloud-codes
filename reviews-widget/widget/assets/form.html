@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Оставить отзыв</title>
+<link rel="stylesheet" href="/assets/form.css">
+</head>
+<body>
+<main class="sheet" id="sheet">
+  <header class="sheet-head">
+    <h1 id="title">Оставьте отзыв</h1>
+    <p class="hint">Расскажите, как всё прошло. Отзыв появится на сайте после проверки.</p>
+  </header>
+
+  <form id="form" novalidate>
+    <fieldset class="rating" id="rating">
+      <legend>Ваша оценка</legend>
+      <div class="stars" id="stars" role="radiogroup" aria-label="Оценка от 1 до 5"></div>
+      <span class="rating-label" id="ratingLabel">Выберите оценку</span>
+    </fieldset>
+
+    <label class="field">
+      <span>Отзыв</span>
+      <textarea id="text" name="text" rows="5" maxlength="2000"
+                placeholder="Что понравилось, что можно улучшить" required></textarea>
+      <span class="counter"><span id="counter">0</span> / 2000</span>
+    </label>
+
+    <label class="field">
+      <span>Как вас зовут <i>— необязательно</i></span>
+      <input id="author" name="author" type="text" maxlength="60" placeholder="Аноним"
+             autocomplete="name">
+    </label>
+
+    <label class="field">
+      <span>Телефон или e-mail <i>— не публикуется</i></span>
+      <input id="contact" name="contact" type="text" maxlength="120"
+             placeholder="Чтобы мы могли ответить" autocomplete="email">
+    </label>
+
+    <!-- Ловушка для ботов: поле спрятано от людей, но заполняется автозаполнением скриптов. -->
+    <div class="trap" aria-hidden="true">
+      <label>Не заполняйте это поле
+        <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
+      </label>
+    </div>
+
+    <p class="error" id="error" role="alert" hidden></p>
+    <button class="submit" id="submit" type="submit">Отправить отзыв</button>
+    <p class="legal">Нажимая кнопку, вы соглашаетесь на публикацию отзыва и имени на сайте.</p>
+  </form>
+
+  <div class="done" id="done" hidden>
+    <div class="done-mark" aria-hidden="true">✓</div>
+    <h2>Спасибо!</h2>
+    <p id="doneText">Отзыв отправлен на модерацию — обычно это занимает пару часов.</p>
+  </div>
+</main>
+
+<script>window.__RW_FORM__ = __RW_FORM_CONFIG__;</script>
+<script src="/assets/form.js"></script>
+</body>
+</html>

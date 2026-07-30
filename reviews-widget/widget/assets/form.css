@@ -1,0 +1,143 @@
+/* Форма отзыва: открывается и отдельной страницей, и в модалке виджета. */
+
+:root {
+  --bg: #f6f7f9;
+  --card: #fff;
+  --fg: #151922;
+  --muted: #6b7280;
+  --border: #e6e8ee;
+  --accent: #2f6df6;
+  --danger: #d64545;
+  --radius: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1116;
+    --card: #171a21;
+    --fg: #e8eaf0;
+    --muted: #98a1b3;
+    --border: #272b36;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.embed { background: var(--card); padding: 20px 16px; align-items: start; }
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px;
+}
+
+body.embed .sheet { border: 0; padding: 4px; }
+
+h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 20px; margin: 0 0 6px; }
+.hint { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+
+/* -------------------------------------------------------------- оценка */
+
+.rating { border: 0; padding: 0; margin: 0 0 18px; }
+.rating legend { padding: 0; font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+.stars { display: flex; gap: 4px; }
+
+.star {
+  width: 40px; height: 40px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: #c9cdd8;
+  transition: transform .12s ease, color .12s ease;
+}
+.star svg { width: 100%; height: 100%; fill: currentColor; display: block; }
+.star:hover { transform: scale(1.12); }
+.star.on { color: #f5b544; }
+.star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+.rating-label { display: block; margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+/* --------------------------------------------------------------- поля */
+
+.field { display: block; margin-bottom: 16px; position: relative; }
+.field > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.field i { font-style: normal; font-weight: 400; color: var(--muted); }
+
+textarea, input[type="text"] {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 13px;
+  resize: vertical;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+body.embed textarea, body.embed input[type="text"] { background: var(--bg); }
+
+textarea:focus, input[type="text"]:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.counter { position: absolute; right: 2px; bottom: -18px; font-size: 12px; color: var(--muted); }
+
+.trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+.error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.submit {
+  width: 100%;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 12px;
+  padding: 13px;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: filter .15s ease;
+}
+.submit:hover { filter: brightness(1.08); }
+.submit[disabled] { opacity: .6; cursor: default; }
+
+.legal { font-size: 12px; color: var(--muted); text-align: center; margin: 12px 0 0; }
+
+/* -------------------------------------------------------------- финал */
+
+.done { text-align: center; padding: 20px 0; }
+.done-mark {
+  width: 56px; height: 56px; margin: 0 auto 14px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: 26px;
+}
+.done p { color: var(--muted); margin: 0; }
