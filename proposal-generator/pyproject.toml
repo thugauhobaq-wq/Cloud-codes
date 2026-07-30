@@ -1,0 +1,44 @@
+[project]
+name = "proposal-generator"
+version = "0.1.0"
+description = "Генератор коммерческих предложений: веб-форма или JSON → PDF с логотипом клиента"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+proposals = "proposals.cli:main"
+
+# Без явного списка setuptools видит рядом с пакетом `samples` и отказывается
+# угадывать, что из этого библиотека.
+[tool.setuptools.packages.find]
+include = ["proposals*"]
+
+[tool.setuptools.package-data]
+proposals = ["web/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # кириллица в строках — интерфейс русскоязычный
+    "RUF002",
+    "RUF003",
+    "E741",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # sys.path в conftest настраивается до импортов пакета
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

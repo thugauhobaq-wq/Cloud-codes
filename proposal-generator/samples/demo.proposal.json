@@ -1,0 +1,91 @@
+{
+  "number": "47",
+  "issued_at": "2026-07-28",
+  "valid_days": 14,
+  "subject": "Разработка сайта-каталога и подключение онлайн-оплаты",
+  "intro": "Спасибо за встречу. Ниже — состав работ, сроки и стоимость по итогам обсуждения. Запускаем каталог на 300 позиций, переносим товары из выгрузки 1С и подключаем оплату картой. Всё, что не вошло в смету, обсуждаем отдельно — без сюрпризов в счёте.",
+  "sender": {
+    "name": "Студия «Тихий Угол»",
+    "person": "Анна Северова",
+    "position": "Руководитель проектов",
+    "phone": "+7 999 123-45-67",
+    "email": "hello@tihiy-ugol.ru",
+    "site": "tihiy-ugol.ru",
+    "address": "",
+    "details": "ИП Северова А. В., ИНН 771234567890",
+    "logo": "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAE8ElEQVR42u3dQVLrMBBF0SyFlbGW7NwUU0hIjGW51e/8qjMXovvaCYN/+/jcbs3c4WRt9qXjYm9wsjahWGnhDR6rh0IAdiy9AaJzEATA0iMG18bA4kNwCK5cfL98eByDlgGw+FAsBJYfgiNg8SE4BJYfgiNw5vL7xcH4EJQOgKc+LPQ2YPkhOAJe+SH4I4Hlh+AIWH4IjoDlh+AIWH4IjoBv+yH4rwOe/hD8FmD5ITgClh+CI+BzPwR/H+DpD8FvAZYfgiPg1R+CPwp4+kPwW4Dlh+AICAAIgOWHxAgIAAiAb/4h8S8Cnv4Q/BYgACAAlh8SIyAAIAACAOkBsPwQFgEBAAEQABAAlwKRAbD8EBgBAQABEAAQAEAAAAEABAAQAEAAAAEAmgTA8kMoAQABcBEgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAAIACMBvaf/Ovp/Vf78CIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACgAVyfgEQAAvk/AIgABbI+QVAACyQ8wuAAFgg5xcAAbBAzi8AAmCBnF8ABMD5nV8ABMD5nV8ABMD5BUAABMD5BUAABMD5BUAABMD5BUAABMD5BUAABMD5BUAABMD5BUAADKDzC4AAGEDnFwABMIDOLwACYACdXwAEwAA6vwAIgAF0fgEQAAPo/AIgAAbQ+QVAAAzgVT/v6v9xigAgAAIgAAiAAAgAAiAAAoAACIAAIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAACIAAC4M7cvwAYQNy/ABhA3L8AGEDcvwAYQNy/ABhA3L8AGEDcvwAYQNy/ABhA3L8AGEDcvwAYQNy/ABhA3L8AGED37/4FwAC6f/cvAAbQ/bt/ATCA7t/9C4ABdP/uXwAMoPsXAAEwgO5fADCA7l8AMIDuXwAwgO5fADCA7l8AMIDuXwAwgKN+Xv/RhwAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAIgAAAAgAIACAAgAAAAgAIACAAgACAALgIEABAAAABAAQAEABAAAABAAQAEABAAAABAAQAEABAAAABAAQAEABAAAABAAQAEABAAAABAAQAEABgXABEADLdBQAEQABAAAABAAQAEABAAAABAAQAaBQAEYCw5f/eewEAARAAEACXArEBEAEIWn4BAAEQABAAEYCo5RcAEICHARAB6Ln8LwPgLQACnv4CAAKwiQAELr8AgABsIgCBy/9uAEQAGn3zvycA3gKg6dP/3QCIADRc/r0BEAFo8uq/NwDeAqDZ039vAEQAGi3/fwIgAtBk+Y8EQARg0c/9RwPgLQAaPP2PBEAEYPHlPxoAEYCFl39EAEQAFl3+UQEQAVhw+UcGwF8HoPC3/TMCIAKw0PKfEQAfCaDwK/+sAHgbgKJP/VkBEAEovPwzAiAEUHDxZwdABKDY8s8OgBBAkcW/MgA/QyAGWPrJi18hAEKAxb9o8SsFQAyw9ALwZwwEgdUX/l5xzyoH4FUQnjF4zF7sZ8rv1RdXitdtfLq55AAAAABJRU5ErkJggg=="
+  },
+  "client": {
+    "name": "ООО «Ромашка»",
+    "person": "Игорь Лапин",
+    "position": "Коммерческий директор",
+    "phone": "",
+    "email": "lapin@romashka.example",
+    "site": "",
+    "address": "г. Казань, ул. Баумана, 12, офис 305",
+    "details": "",
+    "logo": "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAEYUlEQVR42u3dW26rQBREUQ+OgTHKTMdRPhP5RYDm9Kl1pfWPbNemsRXd29ey3JpZ4WRt9tJx2Hc4WZtQzDR4HzxmD4UAbBi9DxCdgyAARo8YXBsDw4fgEFw5fG8+PI5BywAYPhQLgfFDcAQMH4JDYPwQHIEzx++Ng+NDUDoA7vow0WnA+CE4Ao78EPxIYPwQHAHjh+AIGD8ER8D4ITgCvu2H4F8H3P0h+BRg/BAcAeOH4Ah47ofg7wPc/SH4FGD8EBwBR38IfhRw94fgU4DxQ3AEBAAEwPghMQICAALgm39I/EXA3R+CTwECAAJg/JAYAQEAARAASA+A8UNYBAQABEAAQAC8KBAZAOOHwAgIAAiAAIAAAAIACAAgAIAAAAIACADQJADGD6EEAATACwECAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAANQ3+z/voQAgAAgAAoAAIAAIAAKAACAACAACgAAgAAgAAoAAIAAIgAAIAAIgAAKAAAjAXIMTDAFAAARAABAAARAABEAABAABEAABQAAEQAAQAAEQAATAey4ACAACgAAgAAIgAAiAAAgAAiAAAoAACIAAIAACIAAIgAAIAAIgAAKAAAiA60cABMD1IwAC4PoRAAFw/QiAALh+BEAAXD8CIACuHwHoFAD/MQgCIAACgAAIgAAgAAIgAAiAAAgAAiAAAoAACIAAIAACIAAIgAAIAAIgAAKAAAiAAAiAAAiAAAgA/pgGAUAAEAAEAAFAABAABAABQAAQAAQAAUAAEAAEAAFAABAABAABQAAQAAQAAUAAEAAEAAFAABAABAABQAAQAAQAARAAAUAABEAAEAABEAAEQAAEAAEQAAFAAARAABAAAfCaIQACAAIgACAAAgACIAAgAAIAAiAAIAACAAIgACAAAgACIAAIgACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAAgAIACAAAACAPwOgAhAplUAQAAEAAQAEABAAAABAAQAEABAAIBGARABCBv/z+4FAARAAEAAvCgQGwARgKDxCwAIgACAAIgARI1fAEAAHgZABKDn+N8GwCkAAu7+AgACsIgABI5fAEAAFhGAwPF/GgARgEbf/G8JgFMANL37fxoAEYCG498aABGAJkf/rQFwCoBmd/+tARABaDT+/wRABKDJ+PcEQARg0uf+vQFwCoAGd/89ARABmHz8ewMgAjDx+I8IgAjApOM/KgAiABOO/8gA+HUACn/bPyIAIgATjf+MAHgkgMJH/lEBcBqAonf9UQEQASg8/hEBEAIoOPzRARABKDb+0QEQAigy/CsD8DcEYoDRDx5+hQAIAYZ/0fArBUAMMHoBeBkDQWD2wa8Vd1Y5AO+C8IwPHqOH/Uz5XX0D4myStOnjCagAAAAASUVORK5CYII="
+  },
+  "items": [
+    {
+      "title": "Дизайн-концепция и макеты",
+      "description": "Главная, каталог, карточка товара, корзина и оформление заказа. Две итерации правок включены.",
+      "quantity": "1.000",
+      "unit": "проект",
+      "price": "120000.00",
+      "discount_percent": "0.00"
+    },
+    {
+      "title": "Вёрстка и сборка витрины",
+      "description": "Адаптив под мобильные, поддержка Safari и Chrome последних версий.",
+      "quantity": "1.000",
+      "unit": "проект",
+      "price": "95000.00",
+      "discount_percent": "0.00"
+    },
+    {
+      "title": "Перенос каталога из 1С",
+      "description": "Разбор выгрузки, сопоставление категорий, загрузка изображений.",
+      "quantity": "300.000",
+      "unit": "позиция",
+      "price": "140.00",
+      "discount_percent": "10.00"
+    },
+    {
+      "title": "Подключение эквайринга",
+      "description": "ЮKassa: оплата картой и СБП, чеки по 54-ФЗ.",
+      "quantity": "1.000",
+      "unit": "шт.",
+      "price": "28000.00",
+      "discount_percent": "0.00"
+    },
+    {
+      "title": "Сопровождение после запуска",
+      "description": "Мелкие правки и ответы на вопросы, до 8 часов в месяц.",
+      "quantity": "3.000",
+      "unit": "мес.",
+      "price": "18000.00",
+      "discount_percent": "0.00"
+    }
+  ],
+  "sections": [
+    {
+      "title": "Что вы получите",
+      "body": "Работающий каталог с оплатой, доступ в админку и короткую инструкцию для контент-менеджера. Исходники макетов и код передаём вам — привязки к студии нет."
+    },
+    {
+      "title": "Как идёт работа",
+      "body": "Неделя 1–2: дизайн и согласование. Неделя 3–5: вёрстка и перенос каталога. Неделя 6: эквайринг, тестирование, запуск. Каждую пятницу — короткий отчёт о том, что сделано."
+    }
+  ],
+  "currency": "RUB",
+  "vat_mode": "none",
+  "vat_rate": "20.00",
+  "discount_percent": "5.00",
+  "lead_time": "6 недель с момента предоплаты",
+  "payment_terms": "50% предоплата, 50% по факту запуска",
+  "notes": "Стоимость хостинга и домена в смету не входит — оплачивается напрямую провайдеру, ориентировочно 900 ₽ в месяц.",
+  "accent": "#1f5eff",
+  "template": "classic",
+  "show_signature": true
+}
