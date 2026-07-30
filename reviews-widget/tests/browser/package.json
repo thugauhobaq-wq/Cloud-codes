@@ -1,0 +1,13 @@
+{
+  "name": "reviews-widget-browser-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Браузерный смоук виджета. Единственное место в проекте, где есть внешняя зависимость — сам питоновский виджет по-прежнему без них.",
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

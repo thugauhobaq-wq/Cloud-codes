@@ -1,0 +1,36 @@
+services:
+  widget:
+    build: .
+    container_name: reviews-widget
+    # Виджет стоит на чужих сайтах: если сервис лежит, карусель пропадает у
+    # всех клиентов сразу. Поднимаемся и после падения, и после ребута.
+    restart: unless-stopped
+    env_file:
+      # Только внешний адрес, см. .env.example.
+      - path: .env
+        required: false
+    ports:
+      # Только на localhost — снаружи должен стоять nginx с сертификатом,
+      # см. deploy/nginx.conf.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # База с сайтами и отзывами живёт вне контейнера, иначе обновление
+      # образа стирало бы всех клиентов.
+      - ./data:/app/data
+      # Отзывы с площадок, если рядом крутится reviews-dashboard. Только
+      # чтение — виджет в эту базу не пишет.
+      - ../reviews-dashboard/data:/app/dashboard:ro
+    environment:
+      WIDGET_DB: /app/data/widget.db
+      WIDGET_HOST: 0.0.0.0
+      WIDGET_PORT: 8080
+      # Внешний адрес: с ним виджет и форма знают, куда обращаться, когда
+      # сервер стоит за прокси. Замените на свой домен.
+      WIDGET_PUBLIC_URL: ${WIDGET_PUBLIC_URL:-}
+      # Уберите строку, если reviews-dashboard рядом нет.
+      WIDGET_DASHBOARD_DB: /app/dashboard/reviews.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

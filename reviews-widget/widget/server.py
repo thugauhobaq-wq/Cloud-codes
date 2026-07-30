@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import hmac
 import json
 import mimetypes
 import re
@@ -27,6 +26,7 @@ from .models import (
     Site,
     ValidationError,
     clean_text,
+    hash_token,
     normalize_domains,
     now_iso,
 )
@@ -380,8 +380,12 @@ class WidgetHandler(BaseHTTPRequestHandler):
         key = self.headers.get("X-Site") or ""
         token = self.headers.get("X-Admin-Token") or ""
         site = storage.get_site(key) if _KEY_RE.match(key or "") else None
-        if site is None or not hmac.compare_digest(site.admin_token, token):
+        if site is None or not site.check_token(token):
             raise PermissionError("нужен верный ключ сайта и токен")
+        if site.token_needs_upgrade():
+            # База из первых версий: токен лежал открытым текстом. Первый
+            # удачный вход — подходящий момент заменить его хешем.
+            storage.update_site(site.key, token_hash=hash_token(token))
         return site
 
     def _admin_site(self) -> None:
@@ -562,6 +566,9 @@ def serve(host: str = "127.0.0.1", port: int = 8080, db_path: str = str(DEFAULT_
     WidgetHandler.db_path = db_path
     WidgetHandler.public_url = public_url
     WidgetHandler.dashboard_db = dashboard_db
+    # Схему и WAL готовим один раз здесь, чтобы соединения запросов открывались
+    # без DDL — на отдаче отзывов это была основная стоимость запроса.
+    Storage(db_path).close()
     httpd = ThreadingHTTPServer((host, port), WidgetHandler)
     print(f"Виджет отзывов: http://{host}:{port}  (админка /admin, база {db_path})")
     if dashboard_db:
