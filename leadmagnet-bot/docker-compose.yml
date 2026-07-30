@@ -1,0 +1,19 @@
+services:
+  leadmagnet:
+    build: .
+    container_name: leadmagnet-bot
+    # База подписчиков — единственная ценность бота, и собирается она круглосуточно:
+    # сервис должен пережить и падение, и перезагрузку сервера.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # База живёт вне контейнера: обновление образа не должно стирать
+      # собранную аудиторию.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/leadmagnet.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

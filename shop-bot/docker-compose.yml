@@ -1,0 +1,19 @@
+services:
+  shop:
+    build: .
+    container_name: shop-bot
+    # Пропущенный час — это неотвеченные заказы, поэтому сервис должен пережить
+    # и падение, и перезагрузку сервера.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Каталог, корзины и заказы живут вне контейнера, иначе обновление образа
+      # стирало бы магазин целиком.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/shop.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

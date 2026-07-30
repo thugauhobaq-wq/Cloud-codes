@@ -1,0 +1,46 @@
+name: leadmagnet-bot CI
+
+on:
+  push:
+    paths:
+      - 'leadmagnet-bot/**'
+      - '.github/workflows/leadmagnet-bot-ci.yml'
+  pull_request:
+    paths:
+      - 'leadmagnet-bot/**'
+      - '.github/workflows/leadmagnet-bot-ci.yml'
+
+defaults:
+  run:
+    working-directory: leadmagnet-bot
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: leadmagnet-bot/pyproject.toml
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check src tests
+
+      - name: Тесты
+        # Ни сети, ни Telegram: всё работает на временной базе SQLite
+        # и подставных отправителях.
+        run: pytest -q
+
+      - name: Прогон офлайн-команд
+        run: |
+          python -m leadmagnet seed
+          python -m leadmagnet magnets
+        env:
+          DB_PATH: /tmp/ci-leadmagnet.db
+          BOT_USERNAME: ci_bot
