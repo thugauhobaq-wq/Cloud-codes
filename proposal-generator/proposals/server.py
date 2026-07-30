@@ -23,7 +23,8 @@ from .sample import demo_proposal
 from .storage import Drafts, StorageError
 from .template import TEMPLATES, render
 
-WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
+WEB_ROOT = Path(__file__).resolve().parent / "web"
+"""Статика лежит внутри пакета — тогда она едет и в колесо, и в editable-установку."""
 MAX_BODY = 12 * 1024 * 1024
 """Логотипы приезжают внутри JSON в base64 — с запасом на пару крупных PNG."""
 

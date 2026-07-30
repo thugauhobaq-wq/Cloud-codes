@@ -9,8 +9,20 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project.scripts]
-proposals = "proposals.__main__:main"
+proposals = "proposals.cli:main"
+
+# Без явного списка setuptools видит рядом с пакетом `samples` и отказывается
+# угадывать, что из этого библиотека.
+[tool.setuptools.packages.find]
+include = ["proposals*"]
+
+[tool.setuptools.package-data]
+proposals = ["web/*"]
 
 [tool.ruff]
 line-length = 100

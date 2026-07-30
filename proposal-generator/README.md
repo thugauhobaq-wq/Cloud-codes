@@ -152,8 +152,11 @@ proposals/
   storage.py      черновики в JSON
   server.py       локальный http.server под форму
   cli.py          команды serve / render / demo / drafts / font
-web/              форма: index.html + style.css + app.js
+  web/            форма: index.html + style.css + app.js
 ```
+
+Статика лежит внутри пакета, а не рядом с ним, — тогда она едет и в колесо, и
+в editable-установку, и команда `proposals serve` работает из любого каталога.
 
 Координаты в `document.py` человеческие — начало в левом верхнем углу, `y`
 растёт вниз; переворот в систему PDF происходит один раз при записи.
