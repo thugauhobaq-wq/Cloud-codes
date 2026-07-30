@@ -1,0 +1,40 @@
+"""Напоминание о заявках без ответа.
+
+Пример фонового воркера: очередь берётся из базы, поэтому перезапуск
+контейнера ничего не теряет. По этому образцу делаются напоминания клиентам,
+догоняющие сообщения и опрос внешних источников.
+"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+
+from botkit import PeriodicWorker
+
+from .config import Settings
+from .notify import Notify
+from .storage import Storage
+
+
+class StaleRequests(PeriodicWorker):
+    name = "напоминания"
+
+    def __init__(self, storage: Storage, notify: Notify, settings: Settings) -> None:
+        super().__init__(settings.reminder_interval_sec)
+        self._storage = storage
+        self._notify = notify
+        self._settings = settings
+
+    async def tick(self) -> int:
+        minutes = self._settings.reminder_after_min
+        if not minutes:
+            return 0
+
+        sent = 0
+        for request in await self._storage.stale_requests(timedelta(minutes=minutes)):
+            await self._notify.stale_request(request, minutes)
+            # Отметку ставим в любом случае: повторять напоминание каждые
+            # пять минут — верный способ приучить владельца его игнорировать.
+            await self._storage.mark_reminded(request.id)
+            sent += 1
+        return sent

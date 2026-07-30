@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+from {{pkg}}.models import STATUS_DONE, STATUS_TAKEN
+from {{pkg}}.storage import Storage
+
+
+async def test_request_roundtrip(storage: Storage):
+    await storage.upsert_client(1, name="Иван", phone="+7 900 000-00-00")
+    request = await storage.add_request(1, "Нужен сайт")
+
+    assert request.text == "Нужен сайт"
+    assert request.status == "new"
+    assert request.client_name == "Иван"
+    assert request.client_phone == "+7 900 000-00-00"
+
+
+async def test_status_change_is_idempotent(storage: Storage):
+    """Кнопку под сообщением жмут дважды — второй раз ничего меняться не должно."""
+    await storage.upsert_client(1)
+    request = await storage.add_request(1, "Нужен сайт")
+
+    taken = await storage.set_status(request.id, STATUS_TAKEN)
+    assert taken is not None
+    assert taken.status == STATUS_TAKEN
+    assert await storage.set_status(request.id, STATUS_TAKEN) is None
+
+
+async def test_phone_is_not_erased_by_a_later_request(storage: Storage):
+    await storage.upsert_client(1, name="Иван", phone="+7 900 000-00-00")
+    await storage.upsert_client(1, name="Иван Петров")
+
+    client = await storage.get_client(1)
+    assert client.name == "Иван Петров"
+    assert client.phone == "+7 900 000-00-00"
+
+
+async def test_blocked_clients_are_excluded_from_broadcasts(storage: Storage):
+    await storage.upsert_client(1, name="Активный")
+    await storage.upsert_client(2, name="Заблокировал")
+    await storage.mark_blocked(2)
+
+    assert await storage.audience() == [1]
+    assert await storage.count_clients() == 1
+
+
+async def test_returning_client_comes_back_to_the_base(storage: Storage):
+    await storage.upsert_client(1)
+    await storage.mark_blocked(1)
+    await storage.upsert_client(1)
+
+    assert await storage.audience() == [1]
+
+
+async def test_stale_requests_wait_for_the_delay(storage: Storage):
+    await storage.upsert_client(1)
+    request = await storage.add_request(1, "Нужен сайт")
+
+    assert await storage.stale_requests(timedelta(hours=1)) == []
+    stale = await storage.stale_requests(timedelta(seconds=0))
+    assert [item.id for item in stale] == [request.id]
+
+    # О напоминании помним, чтобы не слать его каждые пять минут.
+    await storage.mark_reminded(request.id)
+    assert await storage.stale_requests(timedelta(seconds=0)) == []
+
+
+async def test_answered_request_is_not_stale(storage: Storage):
+    await storage.upsert_client(1)
+    request = await storage.add_request(1, "Нужен сайт")
+    await storage.set_status(request.id, STATUS_TAKEN)
+
+    assert await storage.stale_requests(timedelta(seconds=0)) == []
+
+
+async def test_stats_count_statuses(storage: Storage):
+    await storage.upsert_client(1)
+    first = await storage.add_request(1, "Первая")
+    await storage.add_request(1, "Вторая")
+    await storage.set_status(first.id, STATUS_DONE)
+
+    stats = await storage.stats(30)
+    assert stats == {"total": 2, "open": 1, "done": 1, "cancelled": 0}

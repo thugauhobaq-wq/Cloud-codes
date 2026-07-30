@@ -1,0 +1,49 @@
+"""Сущности бота. Здесь начинается правка шаблона под свою задачу."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+STATUS_NEW = "new"
+STATUS_TAKEN = "taken"
+STATUS_DONE = "done"
+STATUS_CANCELLED = "cancelled"
+
+STATUS_TITLES = {
+    STATUS_NEW: "🆕 новая",
+    STATUS_TAKEN: "🔧 в работе",
+    STATUS_DONE: "✅ закрыта",
+    STATUS_CANCELLED: "❌ отменена",
+}
+
+OPEN_STATUSES = (STATUS_NEW, STATUS_TAKEN)
+
+
+@dataclass(slots=True)
+class Client:
+    tg_id: int
+    name: str = ""
+    phone: str = ""
+    username: str | None = None
+    blocked: bool = False
+
+
+@dataclass(slots=True)
+class Request:
+    """Заявка: что человек написал и что с ней стало."""
+
+    id: int
+    client_id: int
+    text: str
+    status: str = STATUS_NEW
+    created_at: datetime | None = None
+    answered_at: datetime | None = None
+    #: Подтягивается джойном — нужно почти в каждом сообщении.
+    client_name: str = ""
+    client_phone: str = ""
+    username: str | None = None
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in OPEN_STATUSES

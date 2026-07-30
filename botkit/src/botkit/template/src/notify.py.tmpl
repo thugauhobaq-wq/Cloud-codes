@@ -1,0 +1,33 @@
+"""Уведомления владельцу и клиенту."""
+
+from __future__ import annotations
+
+from botkit import Notifier
+
+from .keyboards import request_actions
+from .models import STATUS_TITLES, Request
+from .texts import request_card
+
+
+class Notify(Notifier):
+    """Notifier из botkit плюс сообщения этого бота."""
+
+    async def new_request(self, request: Request) -> None:
+        await self.notify_admins(
+            "🔔 <b>Новая заявка</b>\n\n" + request_card(request, for_admin=True),
+            reply_markup=request_actions(request.id, request.status),
+        )
+
+    async def stale_request(self, request: Request, minutes: int) -> None:
+        await self.notify_admins(
+            f"⏰ <b>Заявка №{request.id} ждёт ответа {minutes} мин</b>\n\n"
+            + request_card(request, for_admin=True),
+            reply_markup=request_actions(request.id, request.status),
+        )
+
+    async def status_changed(self, request: Request) -> bool:
+        """Сообщить клиенту о смене статуса. `False` — клиент недоступен."""
+        title = STATUS_TITLES.get(request.status, request.status)
+        return await self.notify(
+            request.client_id, f"Заявка №{request.id}: <b>{title}</b>"
+        )

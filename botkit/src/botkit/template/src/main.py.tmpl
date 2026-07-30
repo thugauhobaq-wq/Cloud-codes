@@ -1,0 +1,106 @@
+"""Точка входа.
+
+    python -m {{pkg}} run          боевой режим: бот + напоминания
+    python -m {{pkg}} requests     заявки в консоли
+    python -m {{pkg}} stats 7      сводка за период
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import sys
+
+from botkit import make_bot, run_bot, setup_logging
+
+from .config import Settings, load_settings
+from .handlers import admin_commands, build_router
+from .models import OPEN_STATUSES, STATUS_TITLES
+from .notify import Notify
+from .reminders import StaleRequests
+from .storage import Storage
+
+
+async def command_run(settings: Settings) -> None:
+    settings.require()
+
+    storage = Storage(settings.db_path)
+    await storage.open()
+
+    bot = make_bot(settings)
+    notify = Notify(bot, settings.admins())
+
+    await run_bot(
+        bot=bot,
+        routers=[build_router(storage, notify, settings)],
+        workers=[StaleRequests(storage, notify, settings)],
+        commands=admin_commands(),
+        storage=storage,
+    )
+
+
+async def command_requests(settings: Settings, args: argparse.Namespace) -> int:
+    async with Storage(settings.db_path) as storage:
+        statuses = None if args.all else list(OPEN_STATUSES)
+        requests = await storage.list_requests(statuses=statuses, limit=args.limit)
+        if not requests:
+            print("Заявок нет.")
+            return 0
+
+        for item in requests:
+            when = item.created_at.strftime("%d.%m %H:%M") if item.created_at else ""
+            print(f"\n№{item.id} · {when} · {STATUS_TITLES.get(item.status, item.status)}")
+            print(f"  {item.client_name or 'без имени'} {item.client_phone}".rstrip())
+            print(f"  {item.text[:200]}")
+    return 0
+
+
+async def command_stats(settings: Settings, args: argparse.Namespace) -> int:
+    async with Storage(settings.db_path) as storage:
+        stats = await storage.stats(args.days)
+        print(f"За {args.days} дн.\n")
+        print(f"  заявок:    {stats['total']}")
+        print(f"  в работе:  {stats['open']}")
+        print(f"  закрыто:   {stats['done']}")
+        print(f"  отменено:  {stats['cancelled']}")
+        print(f"  в базе:    {await storage.count_clients()}")
+    return 0
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="{{pkg}}", description="{{title}}")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("run", help="боевой режим")
+
+    requests = sub.add_parser("requests", help="заявки в консоли")
+    requests.add_argument("--all", action="store_true", help="включая закрытые")
+    requests.add_argument("--limit", type=int, default=10)
+
+    stats = sub.add_parser("stats", help="сводка за период")
+    stats.add_argument("days", nargs="?", type=int, default=30)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    settings = load_settings()
+    setup_logging(settings.log_level)
+
+    try:
+        if args.command == "run":
+            asyncio.run(command_run(settings))
+            return 0
+        if args.command == "requests":
+            return asyncio.run(command_requests(settings, args))
+        if args.command == "stats":
+            return asyncio.run(command_stats(settings, args))
+    except KeyboardInterrupt:
+        return 0
+
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

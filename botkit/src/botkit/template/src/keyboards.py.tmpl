@@ -1,0 +1,80 @@
+"""Клавиатуры и префиксы callback_data."""
+
+from __future__ import annotations
+
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
+
+from .models import STATUS_DONE, STATUS_TAKEN
+
+CB_STATUS = "st"
+CB_BROADCAST_GO = "bcgo"
+CB_BROADCAST_NO = "bcno"
+
+BTN_NEW_REQUEST = "✍️ Оставить заявку"
+BTN_MY = "📋 Мои заявки"
+BTN_CONTACTS = "📞 Контакты"
+
+
+def main_menu() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_NEW_REQUEST)],
+            [KeyboardButton(text=BTN_MY), KeyboardButton(text=BTN_CONTACTS)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def request_phone() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📞 Отправить телефон", request_contact=True)],
+            [KeyboardButton(text="Пропустить")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def request_actions(request_id: int, status: str) -> InlineKeyboardMarkup:
+    """Кнопки под заявкой у владельца. Набор зависит от текущего статуса."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if status == "new":
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔧 Взять в работу",
+                    callback_data=f"{CB_STATUS}:{request_id}:{STATUS_TAKEN}",
+                )
+            ]
+        )
+    if status in {"new", STATUS_TAKEN}:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Закрыть", callback_data=f"{CB_STATUS}:{request_id}:{STATUS_DONE}"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отменить", callback_data=f"{CB_STATUS}:{request_id}:cancelled"
+                ),
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def broadcast_confirm(count: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"📨 Отправить {count}", callback_data=f"{CB_BROADCAST_GO}:"
+                ),
+                InlineKeyboardButton(text="Отмена", callback_data=f"{CB_BROADCAST_NO}:"),
+            ]
+        ]
+    )

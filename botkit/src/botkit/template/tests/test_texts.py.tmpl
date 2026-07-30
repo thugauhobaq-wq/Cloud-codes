@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from {{pkg}}.models import Request
+from {{pkg}}.texts import request_card, request_list, stats_text
+
+
+def make_request(**kwargs) -> Request:
+    kwargs.setdefault("id", 7)
+    kwargs.setdefault("client_id", 42)
+    kwargs.setdefault("text", "Нужен сайт")
+    kwargs.setdefault("created_at", datetime(2026, 7, 28, 12, tzinfo=UTC))
+    return Request(**kwargs)
+
+
+def test_admin_card_shows_contacts():
+    card = request_card(
+        make_request(client_name="Иван", client_phone="+7 900 000-00-00", username="ivan"),
+        for_admin=True,
+    )
+    assert "Заявка №7" in card
+    assert "+7 900 000-00-00" in card
+    assert "@ivan" in card
+
+
+def test_client_card_hides_contacts():
+    card = request_card(make_request(client_phone="+7 900 000-00-00"))
+    assert "+7 900" not in card
+
+
+def test_html_in_user_text_is_escaped():
+    """Заявка вида «<b>срочно</b>» не должна ломать разметку сообщения."""
+    card = request_card(make_request(text="<b>срочно</b>"))
+    assert "&lt;b&gt;" in card
+    assert "<b>срочно</b>" not in card
+
+
+def test_empty_list_says_so():
+    assert "Пусто" in request_list([], "Открытые заявки")
+
+
+def test_stats_use_russian_plurals():
+    text = stats_text({"total": 5, "open": 2, "done": 3, "cancelled": 0}, 21, 30)
+    assert "21 человек" in text
