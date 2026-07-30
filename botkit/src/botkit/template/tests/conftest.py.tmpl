@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+import pytest
+import pytest_asyncio
+from botkit.testing import FakeBot
+
+from {{pkg}}.config import Settings
+from {{pkg}}.notify import Notify
+from {{pkg}}.storage import Storage
+
+
+@pytest.fixture
+def settings(tmp_path: Path) -> Settings:
+    return Settings(
+        bot_token="test",
+        owner_id=1,
+        db_path=str(tmp_path / "test.db"),
+        project_name="{{title}}",
+        reminder_after_min=60,
+    )
+
+
+@pytest_asyncio.fixture
+async def storage(settings: Settings) -> AsyncIterator[Storage]:
+    store = Storage(settings.db_path)
+    await store.open()
+    try:
+        yield store
+    finally:
+        await store.close()
+
+
+@pytest.fixture
+def bot() -> FakeBot:
+    """Вместо Telegram — список отправленного."""
+    return FakeBot()
+
+
+@pytest.fixture
+def notify(bot: FakeBot, settings: Settings) -> Notify:
+    return Notify(bot, settings.admins())

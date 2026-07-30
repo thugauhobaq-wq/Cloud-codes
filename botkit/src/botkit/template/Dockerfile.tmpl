@@ -1,0 +1,30 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# botkit лежит рядом с проектом и ставится из исходников. Сборку запускайте
+# из каталога, который содержит и botkit, и этот проект:
+#     docker build -f {{project}}/Dockerfile -t {{project}} .
+COPY botkit /app/botkit
+RUN pip install --no-cache-dir /app/botkit
+
+# Зависимости отдельным слоем: правка кода не заставляет ставить их заново.
+COPY {{project}}/pyproject.toml {{project}}/README.md ./
+COPY {{project}}/src ./src
+RUN pip install --no-cache-dir .
+
+# Процесс не должен ходить под root — ему нужен только каталог с базой.
+RUN useradd --create-home --uid 1000 bot \
+    && mkdir -p /app/data \
+    && chown -R bot:bot /app
+USER bot
+
+VOLUME ["/app/data"]
+
+ENV DB_PATH=/app/data/{{pkg}}.db
+
+CMD ["python", "-m", "{{pkg}}", "run"]

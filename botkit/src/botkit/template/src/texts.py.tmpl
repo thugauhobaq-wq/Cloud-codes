@@ -1,0 +1,73 @@
+"""Сообщения бота. Правится под задачу первым делом."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from botkit.texts import counted, escape, short
+
+from .config import Settings
+from .models import STATUS_TITLES, Request
+
+
+def welcome(settings: Settings) -> str:
+    return (
+        f"<b>{escape(settings.project_name)}</b>\n\n"
+        "Опишите, что нужно — передам заявку и вернусь с ответом.\n"
+        "Кнопки внизу помогут."
+    )
+
+
+def contacts(settings: Settings) -> str:
+    if not settings.contacts:
+        return "Контакты пока не заполнены."
+    return f"<b>{escape(settings.project_name)}</b>\n{escape(settings.contacts)}"
+
+
+def request_card(request: Request, *, for_admin: bool = False) -> str:
+    when = request.created_at.strftime("%d.%m %H:%M") if request.created_at else ""
+    lines = [
+        f"<b>Заявка №{request.id}</b> · {STATUS_TITLES.get(request.status, request.status)}",
+        f"🕐 {when}",
+        "",
+        escape(request.text),
+    ]
+    if for_admin:
+        lines.append("")
+        lines.append(f"👤 {escape(request.client_name or 'без имени')}")
+        if request.client_phone:
+            lines.append(f"📞 {escape(request.client_phone)}")
+        if request.username:
+            lines.append(f"✍️ @{escape(request.username)}")
+    return "\n".join(lines)
+
+
+def request_line(request: Request) -> str:
+    when = request.created_at.strftime("%d.%m %H:%M") if request.created_at else ""
+    return (
+        f"№{request.id} · {when} · {STATUS_TITLES.get(request.status, request.status)}\n"
+        f"    {escape(short(request.text, 60))}"
+    )
+
+
+def request_list(requests: Sequence[Request], title: str) -> str:
+    if not requests:
+        return f"<b>{escape(title)}</b>\n\nПусто."
+    lines = [f"<b>{escape(title)}</b>", ""]
+    lines.extend(request_line(item) for item in requests)
+    return "\n".join(lines)
+
+
+def stats_text(stats: dict[str, int], clients: int, days: int) -> str:
+    return "\n".join(
+        [
+            f"<b>За {days} дн.</b>",
+            "",
+            f"Заявок: {stats['total']}",
+            f"В работе: {stats['open']}",
+            f"Закрыто: {stats['done']}",
+            f"Отменено: {stats['cancelled']}",
+            "",
+            f"В базе: {counted(clients, 'человек', 'человека', 'человек')}",
+        ]
+    )

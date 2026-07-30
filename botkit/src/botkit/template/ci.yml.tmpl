@@ -1,0 +1,30 @@
+name: {{project}} CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # botkit ставится из исходников: поправьте путь, если он лежит иначе,
+      # или уберите шаг, когда botkit появится в PyPI.
+      - name: Установить botkit
+        run: pip install -e ../botkit
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check src tests
+
+      - name: Тесты
+        # Ни сети, ни Telegram: временная база SQLite и подставной бот.
+        run: pytest -q

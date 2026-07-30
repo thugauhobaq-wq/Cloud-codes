@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from botkit.testing import FakeBot
+
+from {{pkg}}.config import Settings
+from {{pkg}}.notify import Notify
+from {{pkg}}.reminders import StaleRequests
+from {{pkg}}.storage import Storage
+
+
+async def test_owner_is_reminded_about_a_request_without_an_answer(
+    storage: Storage, notify: Notify, bot: FakeBot, settings: Settings
+):
+    settings.reminder_after_min = 1  # напоминаем почти сразу
+    await storage.upsert_client(1, name="Иван")
+    request = await storage.add_request(1, "Нужен сайт")
+    # Заявка «постарела»: подменяем время создания, чтобы не ждать час.
+    await storage.execute(
+        "UPDATE requests SET created_at = '2020-01-01T00:00:00+00:00' WHERE id = ?",
+        (request.id,),
+    )
+
+    worker = StaleRequests(storage, notify, settings)
+    assert await worker.tick() == 1
+    assert bot.to(settings.owner_id)
+    assert "Нужен сайт" in bot.to(settings.owner_id)[0]
+
+    # Второй раз о той же заявке не напоминаем.
+    assert await worker.tick() == 0
+
+
+async def test_fresh_request_is_left_alone(
+    storage: Storage, notify: Notify, bot: FakeBot, settings: Settings
+):
+    await storage.upsert_client(1)
+    await storage.add_request(1, "Нужен сайт")
+
+    assert await StaleRequests(storage, notify, settings).tick() == 0
+    assert bot.messages == []
+
+
+async def test_reminders_can_be_switched_off(
+    storage: Storage, notify: Notify, bot: FakeBot, settings: Settings
+):
+    settings.reminder_after_min = 0
+    await storage.upsert_client(1)
+    request = await storage.add_request(1, "Нужен сайт")
+    await storage.execute(
+        "UPDATE requests SET created_at = '2020-01-01T00:00:00+00:00' WHERE id = ?",
+        (request.id,),
+    )
+
+    assert await StaleRequests(storage, notify, settings).tick() == 0
+    assert bot.messages == []

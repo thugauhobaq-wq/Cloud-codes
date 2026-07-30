@@ -1,0 +1,199 @@
+"""Хранилище: клиенты и заявки.
+
+Схема описывается строкой, всё остальное — открытие базы, блокировки,
+транзакции, key-value настройки — берётся из botkit.BaseStorage.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
+
+import aiosqlite
+from botkit import BaseStorage, from_iso, now_iso
+
+from .models import OPEN_STATUSES, STATUS_NEW, Client, Request
+
+_REQUEST_SELECT = """
+SELECT r.*, COALESCE(c.name, '') AS client_name, COALESCE(c.phone, '') AS client_phone,
+       c.username AS username
+FROM requests r
+LEFT JOIN clients c ON c.tg_id = r.client_id
+"""
+
+
+class Storage(BaseStorage):
+    schema = """
+    CREATE TABLE IF NOT EXISTS clients (
+        tg_id      INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL DEFAULT '',
+        phone      TEXT NOT NULL DEFAULT '',
+        username   TEXT,
+        created_at TEXT NOT NULL,
+        -- Заблокировавших бота не удаляем: рассылка должна их пропускать,
+        -- а статистика — помнить, что человек в базе был.
+        blocked    INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS requests (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL,
+        text        TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'new',
+        created_at  TEXT NOT NULL,
+        answered_at TEXT,
+        reminded_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS requests_status_idx ON requests (status, created_at);
+    CREATE INDEX IF NOT EXISTS requests_client_idx ON requests (client_id, created_at);
+    """
+
+    # ── клиенты ───────────────────────────────────────────────────────────
+
+    async def upsert_client(
+        self, tg_id: int, *, name: str = "", phone: str = "", username: str | None = None
+    ) -> None:
+        """Записать или обновить клиента.
+
+        Пустые значения не затирают сохранённые: человек мог не поделиться
+        телефоном при повторном обращении, а звонить по нему всё равно нужно.
+        """
+        await self.execute(
+            "INSERT INTO clients (tg_id, name, phone, username, created_at)"
+            " VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT (tg_id) DO UPDATE SET"
+            "   name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE clients.name END,"
+            "   phone = CASE WHEN excluded.phone <> ''"
+            "        THEN excluded.phone ELSE clients.phone END,"
+            "   username = excluded.username,"
+            "   blocked = 0",
+            (tg_id, name, phone, username, now_iso()),
+        )
+
+    async def get_client(self, tg_id: int) -> Client | None:
+        row = await self.fetch_one("SELECT * FROM clients WHERE tg_id = ?", (tg_id,))
+        return _client(row) if row else None
+
+    async def mark_blocked(self, tg_id: int, blocked: bool = True) -> None:
+        await self.execute(
+            "UPDATE clients SET blocked = ? WHERE tg_id = ?", (int(blocked), tg_id)
+        )
+
+    async def audience(self) -> list[int]:
+        """Кому можно писать в рассылке."""
+        rows = await self.fetch_all(
+            "SELECT tg_id FROM clients WHERE blocked = 0 ORDER BY created_at"
+        )
+        return [int(row["tg_id"]) for row in rows]
+
+    async def count_clients(self) -> int:
+        return int(await self.fetch_value("SELECT COUNT(*) FROM clients WHERE blocked = 0", (), 0))
+
+    # ── заявки ────────────────────────────────────────────────────────────
+
+    async def add_request(self, client_id: int, text: str) -> Request:
+        request_id = await self.execute(
+            "INSERT INTO requests (client_id, text, created_at) VALUES (?, ?, ?)",
+            (client_id, text, now_iso()),
+        )
+        request = await self.get_request(request_id)
+        assert request is not None  # вставили строкой выше
+        return request
+
+    async def get_request(self, request_id: int) -> Request | None:
+        row = await self.fetch_one(_REQUEST_SELECT + " WHERE r.id = ?", (request_id,))
+        return _request(row) if row else None
+
+    async def list_requests(
+        self,
+        *,
+        statuses: Sequence[str] | None = None,
+        client_id: int | None = None,
+        limit: int = 20,
+    ) -> list[Request]:
+        sql = _REQUEST_SELECT
+        conditions: list[str] = []
+        params: list = []
+        if statuses:
+            conditions.append(f"r.status IN ({','.join('?' * len(statuses))})")
+            params.extend(statuses)
+        if client_id is not None:
+            conditions.append("r.client_id = ?")
+            params.append(client_id)
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        sql += " ORDER BY r.created_at DESC LIMIT ?"
+        params.append(limit)
+
+        return [_request(row) for row in await self.fetch_all(sql, params)]
+
+    async def set_status(self, request_id: int, status: str) -> Request | None:
+        """Сменить статус. `None` — менять было нечего.
+
+        Так отличается «взял в работу» от повторного нажатия той же кнопки:
+        под старым сообщением её жмут дважды чаще, чем кажется.
+        """
+        changed = await self.execute_changes(
+            "UPDATE requests SET status = ?, answered_at = COALESCE(answered_at, ?)"
+            " WHERE id = ? AND status <> ?",
+            (status, now_iso(), request_id, status),
+        )
+        return await self.get_request(request_id) if changed else None
+
+    # ── напоминания ───────────────────────────────────────────────────────
+
+    async def stale_requests(self, older_than: timedelta) -> list[Request]:
+        """Заявки без ответа дольше указанного срока, о которых ещё не напоминали."""
+        threshold = (datetime.now(UTC) - older_than).isoformat()
+        rows = await self.fetch_all(
+            _REQUEST_SELECT + " WHERE r.status = ? AND r.reminded_at IS NULL AND r.created_at <= ?"
+            " ORDER BY r.created_at LIMIT 20",
+            (STATUS_NEW, threshold),
+        )
+        return [_request(row) for row in rows]
+
+    async def mark_reminded(self, request_id: int) -> None:
+        await self.execute(
+            "UPDATE requests SET reminded_at = ? WHERE id = ?", (now_iso(), request_id)
+        )
+
+    # ── статистика ────────────────────────────────────────────────────────
+
+    async def stats(self, days: int = 30) -> dict[str, int]:
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        rows = await self.fetch_all(
+            "SELECT status, COUNT(*) AS total FROM requests WHERE created_at >= ?"
+            " GROUP BY status",
+            (since,),
+        )
+        counts = {row["status"]: int(row["total"]) for row in rows}
+        return {
+            "total": sum(counts.values()),
+            "open": sum(counts.get(status, 0) for status in OPEN_STATUSES),
+            "done": counts.get("done", 0),
+            "cancelled": counts.get("cancelled", 0),
+        }
+
+
+def _client(row: aiosqlite.Row) -> Client:
+    return Client(
+        tg_id=int(row["tg_id"]),
+        name=row["name"],
+        phone=row["phone"],
+        username=row["username"],
+        blocked=bool(row["blocked"]),
+    )
+
+
+def _request(row: aiosqlite.Row) -> Request:
+    return Request(
+        id=int(row["id"]),
+        client_id=int(row["client_id"]),
+        text=row["text"],
+        status=row["status"],
+        created_at=from_iso(row["created_at"]),
+        answered_at=from_iso(row["answered_at"]),
+        client_name=row["client_name"],
+        client_phone=row["client_phone"],
+        username=row["username"],
+    )

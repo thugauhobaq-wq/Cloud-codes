@@ -1,0 +1,186 @@
+"""Админка: заявки, статистика, рассылка."""
+
+from __future__ import annotations
+
+import logging
+
+from aiogram import F, Router
+from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.types import BotCommand, CallbackQuery, Message
+from botkit import Broadcaster, IsAdmin, Progress, telegram_sender
+from botkit.messaging import edit, parts, send_to_user
+from botkit.texts import escape
+
+from ..config import Settings
+from ..keyboards import (
+    CB_BROADCAST_GO,
+    CB_BROADCAST_NO,
+    CB_STATUS,
+    broadcast_confirm,
+    request_actions,
+)
+from ..models import OPEN_STATUSES, STATUS_TITLES
+from ..notify import Notify
+from ..storage import Storage
+from ..texts import request_card, request_list, stats_text
+
+log = logging.getLogger(__name__)
+
+ADMIN_HELP = """<b>Админка</b>
+
+/requests — открытые заявки
+/requests all — последние 20 любых
+/request 12 — карточка заявки с кнопками
+/stats — сводка за 30 дней, /stats 7 — за неделю
+/broadcast текст — сообщение всем, кто писал боту"""
+
+
+def build_admin_router(storage: Storage, notify: Notify, settings: Settings) -> Router:
+    router = Router(name="admin")
+
+    # Один фильтр на весь роутер: клиентские хендлеры лежат в соседнем
+    # роутере и получают всё, что сюда не прошло.
+    router.message.filter(IsAdmin(settings.admins()))
+    router.callback_query.filter(IsAdmin(settings.admins()))
+
+    @router.message(Command("admin"))
+    async def cmd_admin(message: Message) -> None:
+        await message.answer(ADMIN_HELP)
+
+    # ── заявки ────────────────────────────────────────────────────────────
+
+    @router.message(Command("requests"))
+    async def cmd_requests(message: Message, command: CommandObject) -> None:
+        show_all = (command.args or "").strip().lower() in {"all", "все"}
+        statuses = None if show_all else list(OPEN_STATUSES)
+        requests = await storage.list_requests(statuses=statuses, limit=20)
+
+        await message.answer(
+            request_list(requests, "Все заявки" if show_all else "Открытые заявки")
+        )
+        # Новые показываем карточками с кнопками — их надо обработать сейчас,
+        # а не листать список.
+        for item in requests:
+            if item.status == "new":
+                await message.answer(
+                    request_card(item, for_admin=True),
+                    reply_markup=request_actions(item.id, item.status),
+                )
+
+    @router.message(Command("request"))
+    async def cmd_request(message: Message, command: CommandObject) -> None:
+        raw = (command.args or "").strip().lstrip("#№")
+        request = await storage.get_request(int(raw)) if raw.isdigit() else None
+        if request is None:
+            await message.answer("Не нашёл такую заявку. Формат: /request 12")
+            return
+        await message.answer(
+            request_card(request, for_admin=True),
+            reply_markup=request_actions(request.id, request.status),
+        )
+
+    @router.callback_query(F.data.startswith(f"{CB_STATUS}:"))
+    async def change_status(callback: CallbackQuery) -> None:
+        chunks = parts(callback.data)
+        if len(chunks) < 3 or not chunks[1].isdigit():
+            await callback.answer()
+            return
+
+        status = chunks[2]
+        if status not in STATUS_TITLES:
+            await callback.answer("Неизвестный статус")
+            return
+
+        request = await storage.set_status(int(chunks[1]), status)
+        if request is None:
+            await callback.answer("Статус уже такой")
+            return
+
+        await callback.answer(STATUS_TITLES[status])
+        await edit(
+            callback,
+            request_card(request, for_admin=True),
+            request_actions(request.id, request.status),
+        )
+        await notify.status_changed(request)
+
+    # ── статистика ────────────────────────────────────────────────────────
+
+    @router.message(Command("stats"))
+    async def cmd_stats(message: Message, command: CommandObject) -> None:
+        raw = (command.args or "").strip()
+        days = int(raw) if raw.isdigit() and 0 < int(raw) <= 365 else 30
+        await message.answer(
+            stats_text(await storage.stats(days), await storage.count_clients(), days)
+        )
+
+    # ── рассылка ──────────────────────────────────────────────────────────
+
+    @router.message(Command("broadcast"))
+    async def cmd_broadcast(message: Message, command: CommandObject, state: FSMContext) -> None:
+        text = (command.args or "").strip()
+        if not text:
+            await message.answer("Формат: /broadcast текст сообщения")
+            return
+
+        recipients = await storage.audience()
+        if not recipients:
+            await message.answer("Некому отправлять: база пуста.")
+            return
+
+        # Рассылка необратима: отправленное не отзовёшь, а опечатку увидит
+        # вся база. Один лишний вопрос здесь дешевле извинений потом.
+        await state.update_data(broadcast_text=text)
+        await message.answer(
+            f"<b>Предпросмотр</b>\n\n{escape(text)}\n\nПолучателей: <b>{len(recipients)}</b>",
+            reply_markup=broadcast_confirm(len(recipients)),
+        )
+
+    @router.callback_query(F.data.startswith(f"{CB_BROADCAST_NO}:"))
+    async def cancel_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.update_data(broadcast_text="")
+        await callback.answer("Отменил")
+        await edit(callback, "Рассылка отменена.")
+
+    @router.callback_query(F.data.startswith(f"{CB_BROADCAST_GO}:"))
+    async def start_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
+        data = await state.get_data()
+        text = data.get("broadcast_text", "")
+        if not text:
+            await callback.answer("Текст потерялся, наберите команду заново")
+            return
+
+        await state.update_data(broadcast_text="")
+        await callback.answer("Начинаю")
+        await edit(callback, "📨 Рассылаю…")
+
+        async def report(progress: Progress) -> None:
+            await edit(
+                callback,
+                f"📨 Рассылаю…\n\nОтправлено: {progress.sent} из {progress.total}\n"
+                f"Заблокировали бота: {progress.blocked}",
+            )
+
+        broadcaster = Broadcaster(
+            telegram_sender(callback.bot, disable_web_page_preview=True),
+            on_blocked=storage.mark_blocked,
+        )
+        progress = await broadcaster.run(await storage.audience(), text, on_progress=report)
+
+        await send_to_user(
+            callback,
+            f"<b>Рассылка завершена</b>\n\nДоставлено: {progress.sent} из {progress.total}\n"
+            f"Заблокировали бота: {progress.blocked}\nОшибок: {progress.failed}",
+        )
+
+    return router
+
+
+def admin_commands() -> list[BotCommand]:
+    return [
+        BotCommand(command="requests", description="Заявки"),
+        BotCommand(command="stats", description="Статистика"),
+        BotCommand(command="broadcast", description="Рассылка"),
+        BotCommand(command="admin", description="Справка админа"),
+    ]

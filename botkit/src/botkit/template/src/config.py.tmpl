@@ -1,0 +1,24 @@
+"""Настройки процесса. Всё остальное живёт в базе и правится из чата."""
+
+from __future__ import annotations
+
+from botkit import BotSettings
+from pydantic import Field
+
+
+class Settings(BotSettings):
+    # Токен, админы, путь к базе и уровень логов уже есть в BotSettings.
+
+    project_name: str = Field(default="{{title}}")
+    contacts: str = Field(default="", description="Контакты для раздела «Связаться»")
+
+    #: Через сколько минут напоминать владельцу о заявке без ответа.
+    #: 0 — не напоминать.
+    reminder_after_min: int = Field(default=60, ge=0)
+    reminder_interval_sec: int = Field(default=300, ge=30)
+
+    db_path: str = Field(default="data/{{pkg}}.db")
+
+
+def load_settings() -> Settings:
+    return Settings()

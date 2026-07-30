@@ -1,0 +1,146 @@
+"""Клиентская часть: заявка, свои заявки, контакты."""
+
+from __future__ import annotations
+
+from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import Message
+from botkit.texts import looks_like_phone, normalize_phone
+
+from ..config import Settings
+from ..keyboards import BTN_CONTACTS, BTN_MY, BTN_NEW_REQUEST, main_menu, request_phone
+from ..models import OPEN_STATUSES
+from ..notify import Notify
+from ..storage import Storage
+from ..texts import contacts, request_card, request_list, welcome
+
+SKIP_WORDS = {"пропустить", "-", "нет", "skip"}
+MIN_REQUEST_LENGTH = 5
+
+
+class NewRequest(StatesGroup):
+    text = State()
+    phone = State()
+
+
+def build_client_router(storage: Storage, notify: Notify, settings: Settings) -> Router:
+    router = Router(name="client")
+
+    @router.message(Command("start"))
+    async def cmd_start(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await storage.upsert_client(
+            message.from_user.id,
+            name=message.from_user.full_name,
+            username=message.from_user.username,
+        )
+        await message.answer(welcome(settings), reply_markup=main_menu())
+
+    @router.message(Command("help"))
+    async def cmd_help(message: Message) -> None:
+        await message.answer(
+            f"{BTN_NEW_REQUEST} — описать задачу\n"
+            f"{BTN_MY} — статусы ваших заявок\n"
+            f"{BTN_CONTACTS} — как с нами связаться",
+            reply_markup=main_menu(),
+        )
+
+    @router.message(F.text == BTN_CONTACTS)
+    async def show_contacts(message: Message) -> None:
+        await message.answer(contacts(settings))
+
+    # ── новая заявка ──────────────────────────────────────────────────────
+
+    @router.message(F.text == BTN_NEW_REQUEST)
+    @router.message(Command("new"))
+    async def start_request(message: Message, state: FSMContext) -> None:
+        await state.set_state(NewRequest.text)
+        await message.answer("Опишите, что нужно — одним сообщением.")
+
+    @router.message(NewRequest.text, F.text)
+    async def got_text(message: Message, state: FSMContext) -> None:
+        text = (message.text or "").strip()
+        if len(text) < MIN_REQUEST_LENGTH:
+            await message.answer("Напишите чуть подробнее — так быстрее поймём задачу.")
+            return
+
+        await state.update_data(text=text)
+        client = await storage.get_client(message.from_user.id)
+        if client and client.phone:
+            # Телефон уже знаем — переспрашивать невежливо.
+            await _create(message, state)
+            return
+
+        await state.set_state(NewRequest.phone)
+        await message.answer(
+            "Телефон для связи — кнопкой ниже или сообщением.\n"
+            "Можно пропустить, тогда ответим здесь, в чате.",
+            reply_markup=request_phone(),
+        )
+
+    @router.message(NewRequest.phone, F.contact)
+    async def got_contact(message: Message, state: FSMContext) -> None:
+        await storage.upsert_client(
+            message.from_user.id, phone=normalize_phone(message.contact.phone_number)
+        )
+        await _create(message, state)
+
+    @router.message(NewRequest.phone, F.text)
+    async def got_phone(message: Message, state: FSMContext) -> None:
+        raw = (message.text or "").strip()
+        if raw.lower() in SKIP_WORDS:
+            await _create(message, state)
+            return
+        if not looks_like_phone(raw):
+            await message.answer("Не похоже на номер. Пример: +7 900 123-45-67")
+            return
+
+        await storage.upsert_client(message.from_user.id, phone=normalize_phone(raw))
+        await _create(message, state)
+
+    async def _create(message: Message, state: FSMContext) -> None:
+        data = await state.get_data()
+        await state.clear()
+
+        await storage.upsert_client(
+            message.from_user.id,
+            name=message.from_user.full_name,
+            username=message.from_user.username,
+        )
+        request = await storage.add_request(message.from_user.id, data.get("text", ""))
+
+        await message.answer(
+            f"✅ Заявка №{request.id} принята — скоро ответим.", reply_markup=main_menu()
+        )
+        await notify.new_request(request)
+
+    # ── свои заявки ───────────────────────────────────────────────────────
+
+    @router.message(F.text == BTN_MY)
+    @router.message(Command("my"))
+    async def my_requests(message: Message) -> None:
+        requests = await storage.list_requests(client_id=message.from_user.id, limit=10)
+        if not requests:
+            await message.answer("Заявок пока нет.", reply_markup=main_menu())
+            return
+
+        await message.answer(request_list(requests, "Ваши заявки"))
+        open_requests = [item for item in requests if item.status in OPEN_STATUSES]
+        if open_requests:
+            await message.answer(request_card(open_requests[0]))
+
+    # ── всё остальное ─────────────────────────────────────────────────────
+
+    @router.message(F.text)
+    async def fallback(message: Message, state: FSMContext) -> None:
+        """Свободный текст считаем началом заявки.
+
+        Человек, которому нужно решить вопрос, пишет его сразу, а не ищет
+        кнопку. Отвечать ему «нажмите ✍️ Оставить заявку» — терять заявку.
+        """
+        await state.set_state(NewRequest.text)
+        await got_text(message, state)
+
+    return router
