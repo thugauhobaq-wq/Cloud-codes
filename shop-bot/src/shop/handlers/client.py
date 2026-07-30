@@ -46,12 +46,14 @@ from ..keyboards import (
     main_menu,
     page_count,
     payload,
+    payment_keyboard,
     product_keyboard,
     products_keyboard,
     request_phone,
+    retry_payment_keyboard,
     skip_keyboard,
 )
-from ..models import DELIVERY_COURIER, DELIVERY_TITLES, Cart, Product
+from ..models import DELIVERY_COURIER, DELIVERY_TITLES, PAY_CASH, Cart, Product
 from ..notify import Notifier
 from ..pricing import below_minimum, totals
 from ..storage import EmptyCart, OutOfStock, Storage
@@ -63,6 +65,7 @@ from ..texts import (
     money,
     order_short,
     order_text,
+    payment_prompt,
     product_card,
     welcome,
 )
@@ -402,6 +405,9 @@ def build_client_router(storage: Storage, notifier: Notifier, settings: Settings
                 phone=data.get("phone", ""),
                 address=data.get("address", ""),
                 comment=data.get("comment", ""),
+                # По умолчанию — при получении: пока покупатель не заплатил
+                # картой, заказ считается неоплаченным, а не «ждущим оплату».
+                payment_method=PAY_CASH,
                 track_stock=settings.track_stock,
             )
         except OutOfStock as exc:
@@ -424,13 +430,26 @@ def build_client_router(storage: Storage, notifier: Notifier, settings: Settings
         )
         await state.clear()
 
-        await _replace(
-            callback,
-            f"✅ <b>Заказ №{order.id} принят</b>\n\n"
-            + order_text(order, settings)
-            + "\n\nПродавец свяжется с вами для подтверждения.",
-            None,
-        )
+        keyboard = payment_keyboard(order.id, settings)
+        if settings.online_payment_enabled and keyboard is not None:
+            # Оплату предлагаем сразу после оформления: в этот момент решимость
+            # покупателя максимальная, а через час он уже занят другим.
+            await _replace(
+                callback,
+                f"✅ <b>Заказ №{order.id} принят</b>\n\n"
+                + order_text(order, settings)
+                + "\n\n"
+                + payment_prompt(order, settings),
+                keyboard,
+            )
+        else:
+            await _replace(
+                callback,
+                f"✅ <b>Заказ №{order.id} принят</b>\n\n"
+                + order_text(order, settings)
+                + "\n\nПродавец свяжется с вами для подтверждения.",
+                None,
+            )
         await callback.answer("Заказ отправлен")
         await notifier.new_order(order)
 
@@ -449,7 +468,13 @@ def build_client_router(storage: Storage, notifier: Notifier, settings: Settings
         lines.append("")
         lines.append("Подробности последнего:")
         await message.answer("\n".join(lines))
-        await message.answer(order_text(orders[0], settings))
+
+        last = orders[0]
+        keyboard = None
+        if last.awaits_payment and settings.online_payment_enabled:
+            # Оплата не прошла или её отложили — дать возможность вернуться к ней.
+            keyboard = retry_payment_keyboard(last.id, settings)
+        await message.answer(order_text(last, settings), reply_markup=keyboard)
 
     @router.callback_query(F.data.startswith(f"{CB_NOOP}:"))
     async def noop(callback: CallbackQuery) -> None:

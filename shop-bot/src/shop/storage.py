@@ -15,6 +15,10 @@ from pathlib import Path
 import aiosqlite
 
 from .models import (
+    PAY_CASH,
+    PAY_ONLINE,
+    PAYMENT_PAID,
+    PAYMENT_UNPAID,
     STATUS_CANCELLED,
     STATUS_NEW,
     Cart,
@@ -77,7 +81,12 @@ CREATE TABLE IF NOT EXISTS orders (
     phone          TEXT NOT NULL DEFAULT '',
     comment        TEXT NOT NULL DEFAULT '',
     status         TEXT NOT NULL DEFAULT 'new',
-    created_at     TEXT NOT NULL
+    created_at     TEXT NOT NULL,
+    payment_method TEXT NOT NULL DEFAULT 'cash',
+    payment_status TEXT NOT NULL DEFAULT 'unpaid',
+    paid_at        TEXT,
+    -- telegram_payment_charge_id: по нему возврат ищется у провайдера.
+    charge_id      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS orders_status_idx ON orders (status, created_at);
 CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders (customer_id, created_at);
@@ -99,6 +108,17 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 """
+
+
+#: Колонки, добавленные после первого выпуска. У продавца, который уже принимает
+#: заказы, база создана без них — дописываем на месте, чтобы обновление образа
+#: не требовало ручных действий и не теряло заказы.
+_ORDER_MIGRATIONS = {
+    "payment_method": "TEXT NOT NULL DEFAULT 'cash'",
+    "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
+    "paid_at": "TEXT",
+    "charge_id": "TEXT NOT NULL DEFAULT ''",
+}
 
 
 class OutOfStock(RuntimeError):
@@ -127,7 +147,18 @@ class Storage:
         # Встроенный lower() в SQLite умеет только латиницу: «Чехол» так и
         # остаётся «Чехол», и поиск по-русски не находит ничего.
         await self._db.create_function("rulower", 1, _rulower, deterministic=True)
+        await self._migrate()
         await self._db.commit()
+
+    async def _migrate(self) -> None:
+        """Дописать колонки, которых нет в старой базе."""
+        async with self._conn.execute("PRAGMA table_info(orders)") as cursor:
+            existing = {row["name"] for row in await cursor.fetchall()}
+
+        for column, definition in _ORDER_MIGRATIONS.items():
+            if column not in existing:
+                log.info("добавляю колонку orders.%s", column)
+                await self._conn.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -431,6 +462,7 @@ class Storage:
         phone: str,
         address: str = "",
         comment: str = "",
+        payment_method: str = PAY_CASH,
         track_stock: bool = True,
     ) -> Order:
         """Оформить заказ и списать остатки — одной транзакцией.
@@ -467,8 +499,9 @@ class Storage:
                 cursor = await self._conn.execute(
                     "INSERT INTO orders"
                     " (customer_id, goods_total, delivery_price, delivery, address,"
-                    "  name, phone, comment, status, created_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "  name, phone, comment, status, created_at, payment_method,"
+                    "  payment_status)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         customer_id,
                         cart.subtotal,
@@ -480,6 +513,8 @@ class Storage:
                         comment,
                         STATUS_NEW,
                         datetime.now(UTC).isoformat(),
+                        payment_method,
+                        PAYMENT_UNPAID,
                     ),
                 )
                 order_id = int(cursor.lastrowid)
@@ -588,16 +623,101 @@ class Storage:
 
         return await self.get_order(order_id)
 
+    # ── оплата ────────────────────────────────────────────────────────────
+
+    async def set_payment_method(self, order_id: int, method: str) -> Order | None:
+        """Запомнить выбранный способ оплаты, пока деньги не пришли.
+
+        Оплаченный заказ не трогаем: способ, которым уже заплатили, — часть
+        истории платежа, а не текущее предпочтение покупателя.
+        """
+        async with self._lock:
+            cursor = await self._conn.execute(
+                "UPDATE orders SET payment_method = ?"
+                " WHERE id = ? AND payment_status = ?",
+                (method, order_id, PAYMENT_UNPAID),
+            )
+            await self._conn.commit()
+            changed = cursor.rowcount
+        return await self.get_order(order_id) if changed else None
+
+    async def mark_paid(self, order_id: int, charge_id: str) -> Order | None:
+        """Отметить заказ оплаченным. `None` — он уже был оплачен.
+
+        Идемпотентность здесь обязательна: `successful_payment` может прийти
+        повторно после сбоя сети или перезапуска бота, а второе «оплачено»
+        превратилось бы во второе уведомление продавцу и двойную выручку в
+        статистике.
+        """
+        async with self._lock:
+            cursor = await self._conn.execute(
+                "UPDATE orders SET payment_status = ?, paid_at = ?, charge_id = ?,"
+                "   payment_method = ?"
+                " WHERE id = ? AND payment_status <> ?",
+                (
+                    PAYMENT_PAID,
+                    datetime.now(UTC).isoformat(),
+                    charge_id,
+                    PAY_ONLINE,
+                    order_id,
+                    PAYMENT_PAID,
+                ),
+            )
+            await self._conn.commit()
+            changed = cursor.rowcount
+        return await self.get_order(order_id) if changed else None
+
+    async def unpaid_online_orders(self, older_than_minutes: int = 30) -> list[Order]:
+        """Заказы, ожидающие онлайн-оплату дольше указанного времени.
+
+        Продавцу это нужно, чтобы не готовить заказ, за который не заплатили,
+        и не терять покупателя, у которого оплата не прошла.
+        """
+        threshold = (datetime.now(UTC) - timedelta(minutes=older_than_minutes)).isoformat()
+        rows = await self._fetch_orders(
+            " WHERE o.payment_method = ? AND o.payment_status = ?"
+            "   AND o.status IN ('new', 'accepted') AND o.created_at <= ?"
+            " ORDER BY o.created_at",
+            (PAY_ONLINE, PAYMENT_UNPAID, threshold),
+        )
+        return rows
+
+    async def _fetch_orders(self, tail: str, params: Sequence) -> list[Order]:
+        sql = (
+            "SELECT o.*, c.username AS username FROM orders o"
+            " LEFT JOIN customers c ON c.tg_id = o.customer_id" + tail
+        )
+        async with self._lock, self._conn.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+        return [_order(row, await self._order_lines(int(row["id"]))) for row in rows]
+
     # ── статистика ────────────────────────────────────────────────────────
 
     async def stats(self, days: int = 30) -> dict[str, int]:
         since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
-        async with self._lock, self._conn.execute(
-            "SELECT status, COUNT(*) AS total, SUM(goods_total + delivery_price) AS amount"
-            " FROM orders WHERE created_at >= ? GROUP BY status",
-            (since,),
-        ) as cursor:
-            rows = await cursor.fetchall()
+        async with self._lock:
+            async with self._conn.execute(
+                "SELECT status, COUNT(*) AS total, SUM(goods_total + delivery_price) AS amount"
+                " FROM orders WHERE created_at >= ? GROUP BY status",
+                (since,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+            async with self._conn.execute(
+                "SELECT COUNT(*) AS total,"
+                "       COALESCE(SUM(goods_total + delivery_price), 0) AS amount"
+                " FROM orders WHERE created_at >= ? AND payment_status = ?",
+                (since, PAYMENT_PAID),
+            ) as cursor:
+                paid_row = await cursor.fetchone()
+
+            async with self._conn.execute(
+                "SELECT COUNT(*) AS total FROM orders"
+                " WHERE created_at >= ? AND payment_method = ? AND payment_status = ?"
+                "   AND status IN ('new', 'accepted')",
+                (since, PAY_ONLINE, PAYMENT_UNPAID),
+            ) as cursor:
+                awaiting_row = await cursor.fetchone()
 
         counts = {row["status"]: int(row["total"]) for row in rows}
         # Выручкой считаем только то, что не отменено: иначе отменённые заказы
@@ -610,6 +730,11 @@ class Storage:
             "new": counts.get(STATUS_NEW, 0),
             "cancelled": counts.get(STATUS_CANCELLED, 0),
             "revenue": revenue,
+            # Оплаченное онлайн — деньги, которые уже пришли, в отличие от
+            # общей выручки, где половина ждёт оплаты при получении.
+            "paid_orders": int(paid_row["total"] or 0),
+            "paid_revenue": int(paid_row["amount"] or 0),
+            "awaiting_payment": int(awaiting_row["total"] or 0),
         }
 
     async def top_products(self, days: int = 30, limit: int = 5) -> list[tuple[str, int]]:
@@ -686,4 +811,8 @@ def _order(row: aiosqlite.Row, lines: list[OrderLine]) -> Order:
         status=row["status"],
         created_at=datetime.fromisoformat(row["created_at"]),
         username=row["username"],
+        payment_method=row["payment_method"],
+        payment_status=row["payment_status"],
+        paid_at=datetime.fromisoformat(row["paid_at"]) if row["paid_at"] else None,
+        charge_id=row["charge_id"],
     )

@@ -21,7 +21,7 @@ from aiogram.client.default import DefaultBotProperties
 from .config import Settings, load_settings
 from .handlers import build_router
 from .handlers.admin import admin_commands
-from .models import DELIVERY_TITLES, STATUS_TITLES
+from .models import DELIVERY_TITLES, PAY_TITLES, STATUS_TITLES
 from .notify import Notifier
 from .pricing import fmt_money
 from .seed import seed
@@ -132,8 +132,10 @@ async def command_orders(settings: Settings, args: argparse.Namespace) -> int:
                 f"\n№{order.id} · {when} · {STATUS_TITLES.get(order.status, order.status)} · "
                 f"{fmt_money(order.total, settings.currency)}"
             )
+            payment = PAY_TITLES.get(order.payment_method, order.payment_method)
+            paid = "оплачен" if order.is_paid else "не оплачен"
             print(f"  {order.name} · {order.phone} · "
-                  f"{DELIVERY_TITLES.get(order.delivery, order.delivery)}")
+                  f"{DELIVERY_TITLES.get(order.delivery, order.delivery)} · {payment}, {paid}")
             if order.address:
                 print(f"  {order.address}")
             for line in order.lines:

@@ -12,7 +12,7 @@ from aiogram.types import (
 )
 
 from .config import Settings
-from .models import DELIVERY_COURIER, DELIVERY_PICKUP, Cart, Category, Product
+from .models import DELIVERY_COURIER, DELIVERY_PICKUP, PAY_CASH, Cart, Category, Product
 from .texts import money
 
 # ── префиксы callback_data ────────────────────────────────────────────────
@@ -32,6 +32,8 @@ CB_DELIVERY = "dlv"
 CB_CONFIRM = "confirm"
 CB_CATALOG = "catalog"
 CB_ORDER_STATUS = "ostatus"
+CB_PAY = "pay"
+CB_PAY_METHOD = "paym"
 CB_NOOP = "noop"
 
 BTN_CATALOG = "🛍 Каталог"
@@ -257,6 +259,50 @@ def order_admin_keyboard(order_id: int, status: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="❌ Отменить", callback_data=f"{CB_ORDER_STATUS}:{order_id}:cancelled"
                 ),
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def payment_keyboard(order_id: int, settings: Settings) -> InlineKeyboardMarkup | None:
+    """Выбор оплаты после оформления заказа.
+
+    `None` — способов нет: онлайн-оплата не подключена, а оплату при получении
+    продавец выключил. Тогда бот про оплату не спрашивает вовсе.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    if settings.online_payment_enabled:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="💳 Оплатить картой", callback_data=f"{CB_PAY}:{order_id}"
+                )
+            ]
+        )
+    if settings.cash_payment_enabled:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="💵 Оплата при получении",
+                    callback_data=f"{CB_PAY_METHOD}:{order_id}:{PAY_CASH}",
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
+
+
+def retry_payment_keyboard(order_id: int, settings: Settings) -> InlineKeyboardMarkup:
+    """Повторная попытка оплаты — счёт живёт недолго, а платёж может не пройти."""
+    rows = [
+        [InlineKeyboardButton(text="💳 Оплатить картой", callback_data=f"{CB_PAY}:{order_id}")]
+    ]
+    if settings.cash_payment_enabled:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="💵 Заплачу при получении",
+                    callback_data=f"{CB_PAY_METHOD}:{order_id}:{PAY_CASH}",
+                )
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)

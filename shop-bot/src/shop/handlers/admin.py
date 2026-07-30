@@ -25,6 +25,7 @@ from ..config import Settings
 from ..keyboards import CB_ORDER_STATUS, order_admin_keyboard, payload
 from ..models import (
     DELIVERY_TITLES,
+    PAY_TITLES,
     STATUS_ACCEPTED,
     STATUS_CANCELLED,
     STATUS_DONE,
@@ -43,6 +44,7 @@ ADMIN_HELP = """<b>Админка магазина</b>
 /orders — новые и принятые
 /orders all — последние 20 любых
 /order 12 — карточка заказа с кнопками
+/unpaid — обещали оплатить картой, но не оплатили
 /export — выгрузка заказов в CSV
 
 <b>Товары</b>
@@ -157,7 +159,8 @@ def build_admin_router(storage: Storage, notifier: Notifier, settings: Settings)
         writer = csv.writer(buffer, delimiter=";")
         writer.writerow(
             ["Заказ", "Дата", "Статус", "Покупатель", "Телефон", "Способ", "Адрес",
-             "Товары", "Сумма товаров", "Доставка", "Итого", "Комментарий"]
+             "Товары", "Сумма товаров", "Доставка", "Итого", "Оплата", "Оплачен",
+             "Комментарий"]
         )
         for order in orders:
             goods = "; ".join(f"{line.title} ×{line.qty}" for line in order.lines)
@@ -174,6 +177,8 @@ def build_admin_router(storage: Storage, notifier: Notifier, settings: Settings)
                     order.goods_total,
                     order.delivery_price,
                     order.total,
+                    PAY_TITLES.get(order.payment_method, order.payment_method),
+                    order.paid_at.strftime("%d.%m.%Y %H:%M") if order.paid_at else "",
                     order.comment,
                 ]
             )
@@ -184,6 +189,23 @@ def build_admin_router(storage: Storage, notifier: Notifier, settings: Settings)
             BufferedInputFile(data, filename="orders.csv"),
             caption=f"Заказов в выгрузке: {len(orders)}",
         )
+
+    @router.message(Command("unpaid"))
+    async def cmd_unpaid(message: Message) -> None:
+        """Заказы, за которые обещали заплатить картой, но не заплатили."""
+        orders = await storage.unpaid_online_orders(older_than_minutes=15)
+        if not orders:
+            await message.answer("Все онлайн-заказы оплачены.")
+            return
+
+        lines = ["<b>Ждут оплаты</b>", ""]
+        lines.extend(order_short(item, settings) for item in orders)
+        lines.append("")
+        lines.append(
+            "Оплата могла не пройти. Позвоните покупателю или отмените заказ — "
+            "тогда товары вернутся в наличие."
+        )
+        await message.answer("\n".join(lines))
 
     # ── товары ────────────────────────────────────────────────────────────
 
@@ -374,8 +396,17 @@ def build_admin_router(storage: Storage, notifier: Notifier, settings: Settings)
             f"Новых, ждут ответа: {stats['new']}",
             f"Отменено: {stats['cancelled']}",
             f"Выручка: {money(stats['revenue'], settings)}",
-            f"Покупателей в базе: {customers}",
         ]
+        if settings.online_payment_enabled:
+            # Деньги, которые уже пришли, — не то же самое, что общая выручка,
+            # где часть ждёт оплаты при получении.
+            lines.append(
+                f"Оплачено картой: {stats['paid_orders']} на "
+                f"{money(stats['paid_revenue'], settings)}"
+            )
+            if stats["awaiting_payment"]:
+                lines.append(f"Ждут оплаты: {stats['awaiting_payment']} — /unpaid")
+        lines.append(f"Покупателей в базе: {customers}")
         if top:
             lines.extend(["", "<b>Что покупают</b>"])
             lines.extend(f"• {escape(title)} — {count} шт." for title, count in top)

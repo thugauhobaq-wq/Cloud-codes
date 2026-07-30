@@ -5,8 +5,16 @@ from datetime import UTC, datetime
 from conftest import cart, product
 from shop.config import Settings
 from shop.keyboards import page_count
-from shop.models import DELIVERY_COURIER, DELIVERY_PICKUP, Cart, Order, OrderLine
-from shop.texts import cart_text, order_text, product_card
+from shop.models import (
+    DELIVERY_COURIER,
+    DELIVERY_PICKUP,
+    PAY_ONLINE,
+    PAYMENT_PAID,
+    Cart,
+    Order,
+    OrderLine,
+)
+from shop.texts import cart_text, order_text, payment_line, payment_prompt, product_card
 
 
 def test_empty_cart_text(settings: Settings):
@@ -95,3 +103,41 @@ def test_page_count():
     assert page_count(6, 6) == 1
     assert page_count(7, 6) == 2
     assert page_count(13, 6) == 3
+
+
+# ── оплата ────────────────────────────────────────────────────────────────
+
+
+def paid_order(**kwargs) -> Order:
+    kwargs.setdefault("id", 7)
+    kwargs.setdefault("customer_id", 42)
+    kwargs.setdefault("lines", [OrderLine(product_id=1, title="Чехол", price=990, qty=1)])
+    kwargs.setdefault("goods_total", 990)
+    return Order(**kwargs)
+
+
+def test_cash_order_says_payment_on_delivery(settings: Settings):
+    assert "при получении" in payment_line(paid_order())
+
+
+def test_online_order_awaiting_money_is_marked(settings: Settings):
+    """Продавец должен видеть, что деньги ещё не пришли, до отправки заказа."""
+    line = payment_line(paid_order(payment_method=PAY_ONLINE))
+    assert "ждём оплату" in line
+
+
+def test_paid_order_is_marked_paid(settings: Settings):
+    line = payment_line(paid_order(payment_method=PAY_ONLINE, payment_status=PAYMENT_PAID))
+    assert "оплачено" in line
+
+
+def test_order_card_shows_payment(settings: Settings):
+    text = order_text(paid_order(payment_method=PAY_ONLINE, payment_status=PAYMENT_PAID), settings)
+    assert "Оплата:" in text
+
+
+def test_payment_prompt_names_the_provider(settings: Settings):
+    settings.payment_provider_name = "ЮKassa"
+    prompt = payment_prompt(paid_order(), settings)
+    assert "ЮKassa" in prompt
+    assert "990 ₽" in prompt
