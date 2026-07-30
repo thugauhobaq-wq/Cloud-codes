@@ -171,12 +171,57 @@
       <button type="button" id="download2" class="btn btn--primary btn--wide">Скачать PDF</button>
     </div>
 
+    <div class="card send-card">
+      <h2>Отправка</h2>
+      <p class="state-line" id="sendState"></p>
+      <label>Кому<input id="sendTo" type="email" placeholder="lapin@romashka.ru"></label>
+      <details class="send-more">
+        <summary>Тема и текст письма</summary>
+        <label>Тема<input id="sendSubject" placeholder="подставим стандартную"></label>
+        <label>Текст<textarea id="sendBody" rows="5" placeholder="подставим стандартный — нажмите «Посмотреть письмо»"></textarea></label>
+      </details>
+      <div class="send-buttons">
+        <button type="button" class="btn btn--ghost" id="previewMail">Посмотреть письмо</button>
+        <button type="button" class="btn btn--primary" id="sendMail">Отправить</button>
+      </div>
+      <p class="muted send-hint" id="sendHint"></p>
+      <ul class="events" id="events"></ul>
+    </div>
+
     <div class="card">
       <h2>Черновики</h2>
       <div class="draft-save">
         <input id="draftSlug" placeholder="romashka-katalog">
       </div>
       <ul id="drafts" class="drafts"></ul>
+      <dl class="funnel" id="funnel"></dl>
+    </div>
+
+    <div class="card smtp-card">
+      <h2>Почта</h2>
+      <details id="smtpBox">
+        <summary id="smtpSummary">не настроена</summary>
+        <div class="grid grid--2">
+          <label>Сервер<input name="smtp.host" placeholder="smtp.yandex.ru"></label>
+          <label>Порт<input name="smtp.port" type="number" value="465"></label>
+        </div>
+        <div class="grid grid--2">
+          <label>Логин<input name="smtp.user" placeholder="me@yandex.ru"></label>
+          <label>Пароль приложения<input name="smtp.password" type="password" placeholder="не показываем сохранённый"></label>
+        </div>
+        <div class="grid grid--2">
+          <label>От кого<input name="smtp.sender" placeholder="совпадает с логином"></label>
+          <label>Шифрование
+            <select name="smtp.ssl_mode">
+              <option value="ssl">SSL (порт 465)</option>
+              <option value="starttls">STARTTLS (порт 587)</option>
+              <option value="plain">без шифрования</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted">Для Яндекса, Mail.ru и Gmail нужен отдельный пароль приложения, а не пароль от аккаунта. Он сохраняется в файл только на этой машине.</p>
+        <button type="button" class="btn btn--ghost btn--wide" id="saveSmtp">Сохранить и проверить</button>
+      </details>
     </div>
 
     <div class="card preview-card">

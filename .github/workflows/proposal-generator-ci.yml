@@ -42,3 +42,14 @@ jobs:
           python -m proposals demo --out /tmp/demo.pdf
           python -m proposals render samples/demo.proposal.json --out /tmp/sample.pdf
           head -c 8 /tmp/sample.pdf | grep -q '%PDF' && echo "PDF на месте"
+
+      - name: Проверить отправку вхолостую
+        # Письмо собирается целиком, но --dry-run никуда его не отправляет,
+        # так что почтовый сервер для этого шага не нужен.
+        run: |
+          python -m proposals --data /tmp/kp demo --json /tmp/kp/romashka.proposal.json \
+              --out /tmp/kp-demo.pdf
+          python -m proposals --data /tmp/kp send romashka --to client@example.com \
+              --public-url https://kp.example.test --dry-run | tee /tmp/letter.txt
+          grep -q 'https://kp.example.test/p/' /tmp/letter.txt
+          python -m proposals --data /tmp/kp status
