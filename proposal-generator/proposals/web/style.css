@@ -412,3 +412,16 @@ input[type="color"] { padding: 2px; height: 38px; cursor: pointer; }
 .drafts .tag[data-status="declined"] { background: #fdecec; color: #8a1f1f; }
 
 .smtp-card .btn--wide { margin-top: 8px; }
+
+/* --- реквизиты и счёт --- */
+
+.requisites summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.requisites[open] summary { margin-bottom: 14px; }
+
+#downloadInvoice { margin-top: 8px; }
+#remind { margin-top: 8px; }

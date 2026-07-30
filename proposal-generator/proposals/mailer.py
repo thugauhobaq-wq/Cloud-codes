@@ -203,6 +203,44 @@ def default_body(proposal: Proposal, link: str = "") -> str:
     return "\n".join(lines)
 
 
+def default_reminder_subject(proposal: Proposal) -> str:
+    return f"Напоминание: коммерческое предложение № {proposal.number}"
+
+
+def default_reminder_body(proposal: Proposal, link: str = "", days: int = 0) -> str:
+    """Вежливое напоминание.
+
+    Тон намеренно мягкий и короткий: письмо-напоминание легко превращается в
+    навязчивость, а задача — просто вернуть предложение в поле зрения.
+    """
+    who = proposal.client.person or proposal.client.name
+    lines = [f"Здравствуйте, {who}!" if who else "Здравствуйте!", ""]
+
+    subject = f" по теме «{proposal.subject}»" if proposal.subject else ""
+    when = f" {days} дней назад" if days else ""
+    lines.append(f"Напоминаю о коммерческом предложении{subject}, которое отправлял{when}.")
+    lines.append("Если вопрос ещё в работе — просто скажите, сколько нужно времени.")
+
+    if proposal.valid_days > 0:
+        lines.append(f"Предложение действительно до {format_date(proposal.valid_until)}.")
+    lines.append("")
+    if link:
+        lines.append("Посмотреть и ответить одним нажатием:")
+        lines.append(link)
+    else:
+        lines.append("Документ приложен к письму в PDF.")
+    lines.append("")
+    lines.append("Если предложение больше не актуально, тоже дайте знать — я не буду напоминать.")
+
+    signature = proposal.sender.person or proposal.sender.name
+    if signature:
+        lines += ["", "--", signature]
+        if proposal.sender.person and proposal.sender.name:
+            lines.append(proposal.sender.name)
+        lines += proposal.sender.contacts
+    return "\n".join(lines)
+
+
 def _html_body(text: str, link: str) -> str:
     """HTML-версия того же письма: только абзацы и одна кнопка."""
     paragraphs = []
@@ -363,4 +401,44 @@ def deliver(
         return message
     send(config, message)
     delivery.mark_sent(parseaddr(to)[1] or to)
+    return message
+
+
+def remind(
+    config: SmtpConfig,
+    proposal: Proposal,
+    delivery: Delivery,
+    pdf: bytes,
+    *,
+    base_url: str,
+    subject: str = "",
+    body: str = "",
+    dry_run: bool = False,
+) -> EmailMessage:
+    """Напомнить о предложении, которое ушло, но осталось без ответа.
+
+    Отправляем на тот же адрес, что и в первый раз: напоминание неизвестно
+    кому — это уже рассылка, а не напоминание.
+    """
+    if delivery.status not in ("sent", "viewed"):
+        raise MailError("напоминать не о чем: предложение ещё не отправлено или уже решено")
+    to = delivery.recipient
+    if not to:
+        raise MailError("не сохранился адрес, на который отправляли")
+
+    delivery.ensure_token()
+    message = build_message(
+        config,
+        proposal,
+        pdf,
+        to=to,
+        subject=subject or default_reminder_subject(proposal),
+        body=body or default_reminder_body(proposal, delivery.link(base_url) if base_url else "",
+                                           delivery.silent_days() or 0),
+        link=delivery.link(base_url) if base_url else "",
+    )
+    if dry_run:
+        return message
+    send(config, message)
+    delivery.mark_reminded()
     return message

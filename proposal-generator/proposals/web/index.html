@@ -60,7 +60,20 @@
         </div>
         <label>Сайт<input name="sender.site" placeholder="studio.ru"></label>
         <label>Адрес<input name="sender.address"></label>
-        <label>Реквизиты<textarea name="sender.details" rows="2" placeholder="ИП Иванов И. И., ИНН 770000000000"></textarea></label>
+        <details class="requisites">
+          <summary>Реквизиты для счёта</summary>
+          <div class="grid grid--2">
+            <label>ИНН<input name="sender.inn" inputmode="numeric" placeholder="771234567890"></label>
+            <label>КПП<input name="sender.kpp" inputmode="numeric"></label>
+          </div>
+          <label>Банк<input name="sender.bank.name" placeholder="АО «Т-Банк», г. Москва"></label>
+          <div class="grid grid--2">
+            <label>БИК<input name="sender.bank.bik" inputmode="numeric" placeholder="044525974"></label>
+            <label>Корр. счёт<input name="sender.bank.corr_account" inputmode="numeric"></label>
+          </div>
+          <label>Расчётный счёт<input name="sender.bank.account" inputmode="numeric" placeholder="40802810100000001234"></label>
+          <label>Прочее<textarea name="sender.details" rows="2" placeholder="ОГРНИП, номер договора"></textarea></label>
+        </details>
       </section>
 
       <section class="card card--accent" data-party="client">
@@ -79,7 +92,14 @@
           <label>Почта<input name="client.email"></label>
         </div>
         <label>Адрес<input name="client.address"></label>
-        <label>Реквизиты<textarea name="client.details" rows="2"></textarea></label>
+        <details class="requisites">
+          <summary>Реквизиты для счёта</summary>
+          <div class="grid grid--2">
+            <label>ИНН<input name="client.inn" inputmode="numeric"></label>
+            <label>КПП<input name="client.kpp" inputmode="numeric"></label>
+          </div>
+          <label>Прочее<textarea name="client.details" rows="2"></textarea></label>
+        </details>
       </section>
     </div>
 
@@ -169,6 +189,7 @@
       <dl id="totals"></dl>
       <p class="words muted" id="inWords"></p>
       <button type="button" id="download2" class="btn btn--primary btn--wide">Скачать PDF</button>
+      <button type="button" id="downloadInvoice" class="btn btn--wide">Счёт на оплату</button>
     </div>
 
     <div class="card send-card">
@@ -184,6 +205,7 @@
         <button type="button" class="btn btn--ghost" id="previewMail">Посмотреть письмо</button>
         <button type="button" class="btn btn--primary" id="sendMail">Отправить</button>
       </div>
+      <button type="button" class="btn btn--wide" id="remind" hidden>Напомнить</button>
       <p class="muted send-hint" id="sendHint"></p>
       <ul class="events" id="events"></ul>
     </div>

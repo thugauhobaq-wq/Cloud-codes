@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import invoice as invoice_module
 from . import mailer, storage
 from .delivery import summarize
 from .mailer import MailError
@@ -65,6 +66,20 @@ def build_parser() -> argparse.ArgumentParser:
     smtp.add_argument("--ssl", default=None, choices=("ssl", "starttls", "plain"))
     smtp.add_argument("--check", action="store_true", help="проверить связь и вход")
 
+    remind = sub.add_parser("remind", help="напомнить о предложениях, оставшихся без ответа")
+    remind.add_argument("slug", nargs="?", default=None,
+                        help="одно предложение; без него — все, кто молчит")
+    remind.add_argument("--after", type=int, default=5,
+                        help="сколько дней молчания считать поводом (по умолчанию 5)")
+    remind.add_argument("--public-url", default="")
+    remind.add_argument("--dry-run", action="store_true", help="показать письма, не отправляя")
+
+    bill = sub.add_parser("invoice", help="счёт на оплату из черновика")
+    bill.add_argument("source", help="имя черновика или путь к .proposal.json")
+    bill.add_argument("--out", default=None)
+    bill.add_argument("--number", default="", help="номер счёта, если он не равен номеру КП")
+    bill.add_argument("--date", default="", help="дата счёта, по умолчанию — дата КП")
+
     status = sub.add_parser("status", help="воронка: что отправлено, просмотрено и принято")
     status.add_argument("slug", nargs="?", default=None, help="показать журнал одного предложения")
 
@@ -90,6 +105,10 @@ def main(argv: list[str] | None = None) -> int:
                 return _render(args)
             case "send":
                 return _send(args)
+            case "remind":
+                return _remind(args)
+            case "invoice":
+                return _invoice(args)
             case "smtp":
                 return _smtp(args)
             case "status":
@@ -194,6 +213,88 @@ def _send(args: argparse.Namespace) -> int:
     return 0
 
 
+def _remind(args: argparse.Namespace) -> int:
+    drafts = Drafts(args.data)
+    config = mailer.load_config(args.data)
+
+    if args.slug:
+        targets = [(args.slug, drafts.read(args.slug))]
+    else:
+        targets = []
+        for info in drafts.list():
+            record = storage.load(info.path)
+            if record.delivery.needs_reminder(args.after):
+                targets.append((info.slug, record))
+
+    if not targets:
+        print(f"Некому напоминать: никто не молчит дольше {args.after} дн.")
+        return 0
+
+    for slug, record in targets:
+        days = record.delivery.silent_days()
+        try:
+            data, _ = render(record.proposal, font=args.font)
+            message = mailer.remind(
+                config,
+                record.proposal,
+                record.delivery,
+                data,
+                base_url=args.public_url,
+                dry_run=args.dry_run,
+            )
+        except MailError as error:
+            print(f"{slug}: {error}", file=sys.stderr)
+            continue
+
+        if args.dry_run:
+            print(f"--- {slug} (молчит {days} дн.) → {message['To']} ---")
+            print(message.get_body(("plain",)).get_content().rstrip())
+            print()
+            continue
+
+        drafts.write(slug, record)
+        print(f"{slug}: напоминание отправлено на {record.delivery.recipient} "
+              f"(молчал {days} дн.)")
+    if args.dry_run:
+        print("Ничего не отправлено: это пробный прогон.")
+    return 0
+
+
+def _invoice(args: argparse.Namespace) -> int:
+    # Счёт удобно выставлять и по имени черновика, и по файлу «на подумать».
+    source = Path(args.source)
+    record = storage.load(source) if source.exists() else Drafts(args.data).read(args.source)
+    proposal = record.proposal
+
+    issued = _parse_date(args.date) if args.date else None
+    data, warnings = invoice_module.render(
+        proposal, number=args.number, issued_at=issued, font=args.font
+    )
+    for warning in warnings:
+        print(f"Предупреждение: {warning}", file=sys.stderr)
+
+    number = args.number or proposal.number
+    out = Path(args.out) if args.out else Path(proposal.filename.replace("KP-", "Schet-", 1))
+    if str(out) == "-":
+        sys.stdout.buffer.write(data)
+        return 0
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    print(f"Счёт № {number}: {out}  ({len(data) / 1024:.0f} КБ)")
+    return 0
+
+
+def _parse_date(text: str):
+    from datetime import datetime
+
+    for pattern in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(text.strip(), pattern).date()
+        except ValueError:
+            continue
+    raise StorageError(f"непонятная дата: {text!r} — ждём 2026-07-28 или 28.07.2026")
+
+
 def _smtp(args: argparse.Namespace) -> int:
     config = mailer.load_config(args.data)
     changed = False
@@ -244,8 +345,9 @@ def _status(args: argparse.Namespace) -> int:
     width = max(len(info.slug) for info in found)
     for info in found:
         label = f"[{info.status_label}]"
+        silence = f"молчит {info.silent_days} дн." if info.silent_days else ""
         print(f"{info.slug:<{width}}  {label:<14} № {info.number:<6} "
-              f"{info.total:>16}  {info.client or info.subject or '—'}")
+              f"{info.total:>16}  {info.client or info.subject or '—'} {silence}".rstrip())
 
     items = []
     for info in found:

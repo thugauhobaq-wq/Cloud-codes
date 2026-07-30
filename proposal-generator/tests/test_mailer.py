@@ -9,7 +9,7 @@ import pytest
 
 from proposals import mailer
 from proposals.delivery import Delivery
-from proposals.mailer import MailError, SmtpConfig, build_message, deliver
+from proposals.mailer import MailError, SmtpConfig, build_message, deliver, remind
 from proposals.models import LineItem, Party, Proposal
 from proposals.sample import demo_proposal
 
@@ -237,3 +237,77 @@ def test_configured_requires_host_and_sender():
     assert not SmtpConfig(host="h").configured
     assert not SmtpConfig(sender="a@b.ru").configured
     assert SmtpConfig(host="h", sender="a@b.ru").configured
+
+
+# --- напоминания ---------------------------------------------------------------
+
+
+def sent_delivery(days: int = 7) -> Delivery:
+    from datetime import timedelta
+
+    from proposals.delivery import now
+
+    state = Delivery()
+    state.mark_sent("client@example.com")
+    state.sent_at = now() - timedelta(days=days)
+    return state
+
+
+def test_reminder_is_short_and_polite(config, proposal):
+    state = sent_delivery(7)
+    message = remind(
+        config, proposal, state, b"pdf", base_url="https://kp.example", dry_run=True
+    )
+    text = message.get_body(("plain",)).get_content()
+
+    assert message["Subject"] == "Напоминание: коммерческое предложение № 47"
+    assert "7 дней назад" in text
+    assert "больше не актуально" in text, "выход из переписки нужно предлагать прямо"
+    assert state.link("https://kp.example") in text
+
+
+def test_reminder_goes_to_the_same_address(config, proposal, monkeypatch):
+    """Напоминание неизвестно кому — это уже рассылка."""
+    sent = []
+    monkeypatch.setattr(mailer, "send", lambda cfg, msg: sent.append(msg))
+
+    state = sent_delivery()
+    remind(config, proposal, state, b"pdf", base_url="")
+    assert sent[0]["To"] == "client@example.com"
+    assert state.reminders == 1
+
+
+def test_dry_run_does_not_count_as_a_reminder(config, proposal):
+    state = sent_delivery()
+    remind(config, proposal, state, b"pdf", base_url="", dry_run=True)
+    assert state.reminders == 0
+    assert state.reminded_at is None
+
+
+def test_cannot_remind_about_an_unsent_proposal(config, proposal):
+    with pytest.raises(MailError, match="напоминать не о чем"):
+        remind(config, proposal, Delivery(), b"pdf", base_url="", dry_run=True)
+
+
+def test_cannot_remind_about_a_decided_proposal(config, proposal):
+    state = sent_delivery()
+    state.decide(True)
+    with pytest.raises(MailError, match="напоминать не о чем"):
+        remind(config, proposal, state, b"pdf", base_url="", dry_run=True)
+
+
+def test_reminder_without_a_stored_address(config, proposal):
+    state = sent_delivery()
+    state.recipient = ""
+    with pytest.raises(MailError, match="не сохранился адрес"):
+        remind(config, proposal, state, b"pdf", base_url="", dry_run=True)
+
+
+def test_custom_reminder_text_wins(config, proposal):
+    state = sent_delivery()
+    message = remind(
+        config, proposal, state, b"pdf", base_url="",
+        subject="Ау", body="Как там наше предложение?", dry_run=True,
+    )
+    assert message["Subject"] == "Ау"
+    assert message.get_body(("plain",)).get_content().strip() == "Как там наше предложение?"

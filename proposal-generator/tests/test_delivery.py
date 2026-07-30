@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -15,6 +15,7 @@ from proposals.delivery import (
     VIEWED,
     Delivery,
     Event,
+    now,
     parse_time,
     summarize,
 )
@@ -224,3 +225,76 @@ def test_summarize_treats_unknown_status_as_draft():
     summary = summarize([("магия", Decimal("10"), "RUB")])
     assert summary["counts"][DRAFT] == 1
     assert summary["delivered"] == 0
+
+
+# --- напоминания ---------------------------------------------------------------
+
+
+def test_silence_is_not_counted_before_sending():
+    assert Delivery().silent_days() is None
+
+
+def test_silence_counts_from_the_first_letter():
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.sent_at = now() - timedelta(days=6)
+
+    assert state.silent_days() == 6
+    assert state.needs_reminder(5)
+    assert not state.needs_reminder(7)
+
+
+def test_silence_restarts_after_a_reminder():
+    """Иначе одно предложение считалось бы просроченным вечно."""
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.sent_at = now() - timedelta(days=10)
+    state.mark_reminded()
+
+    assert state.silent_days() == 0
+    assert not state.needs_reminder(5)
+    assert state.reminders == 1
+    assert state.events[-1].kind == "reminded"
+
+
+def test_a_decided_proposal_never_needs_reminding():
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.sent_at = now() - timedelta(days=30)
+    state.decide(True)
+
+    assert state.silent_days() is None
+    assert not state.needs_reminder(1)
+
+
+def test_a_viewed_but_silent_proposal_still_needs_reminding():
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.sent_at = now() - timedelta(days=8)
+    state.mark_viewed()
+    assert state.needs_reminder(5), "открыл и молчит — самый повод напомнить"
+
+
+def test_reminders_survive_a_roundtrip():
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.mark_reminded()
+    restored = Delivery.from_dict(state.to_dict())
+
+    assert restored.reminders == 1
+    assert restored.reminded_at == state.reminded_at
+
+
+def test_reset_forgets_reminders():
+    state = Delivery()
+    state.mark_sent("a@example.com")
+    state.mark_reminded()
+    state.reset()
+
+    assert state.reminders == 0
+    assert state.reminded_at is None
+
+
+def test_broken_reminder_count_becomes_zero():
+    assert Delivery.from_dict({"reminders": "много"}).reminders == 0
+    assert Delivery.from_dict({"reminders": -5}).reminders == 0

@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import pytest
 
@@ -468,3 +468,124 @@ def test_is_loopback():
     assert is_loopback("localhost")
     assert not is_loopback("0.0.0.0")
     assert not is_loopback("192.168.1.10")
+
+
+# --- счёт и напоминания --------------------------------------------------------
+
+
+def billable(drafts, slug="kp"):
+    """Черновик с реквизитами, по которому можно выставить счёт."""
+    from proposals.models import Bank
+    from proposals.storage import Record
+
+    record = Record(proposal=demo_proposal())
+    record.proposal.sender.inn = "771234567890"
+    record.proposal.sender.bank = Bank(
+        name="АО «Т-Банк»", bik="044525974", account="40802810100000001234"
+    )
+    drafts.write(slug, record)
+    return record
+
+
+def test_invoice_from_a_saved_draft(public):
+    base, drafts = public
+    billable(drafts)
+
+    status, headers, body = post(f"{base}/api/invoice", {"slug": "kp"})
+    assert status == 200
+    assert headers["Content-Type"] == "application/pdf"
+    assert headers["Content-Disposition"].startswith('inline; filename="Schet-')
+    assert body.startswith(b"%PDF")
+    assert "X-Proposal-Warnings" not in headers
+
+
+def test_invoice_from_the_form_without_saving(public):
+    """Счёт по тому, что сейчас в полях, — черновик для этого не обязателен."""
+    from proposals import storage
+
+    base, _ = public
+    payload = storage.to_json(demo_proposal())
+    status, headers, body = post(f"{base}/api/invoice", payload)
+
+    assert status == 200 and body.startswith(b"%PDF")
+    assert "X-Proposal-Warnings" not in headers
+
+
+def test_invoice_warns_about_missing_requisites(public):
+    """Счёт всё равно отдаём — реквизиты могут вписать руками."""
+    from proposals import storage
+    from proposals.models import LineItem, Party, Proposal
+
+    base, _ = public
+    payload = storage.to_json(
+        Proposal(sender=Party(name="ИП Иванов"), client=Party(name="ООО «Рога»"),
+                 items=[LineItem(title="Работа", price=100)])
+    )
+    status, headers, body = post(f"{base}/api/invoice", payload)
+
+    assert status == 200 and body.startswith(b"%PDF")
+    assert "банковские реквизиты" in unquote(headers["X-Proposal-Warnings"])
+
+
+def test_invoice_of_a_missing_draft_is_404(public):
+    base, _ = public
+    with pytest.raises(urllib.error.HTTPError) as error:
+        post(f"{base}/api/invoice", {"slug": "нет-такого"})
+    assert error.value.code == 404
+
+
+def test_invoice_number_can_be_overridden(public):
+    base, drafts = public
+    billable(drafts)
+    _, _, plain = post(f"{base}/api/invoice", {"slug": "kp"})
+    _, _, renumbered = post(f"{base}/api/invoice", {"slug": "kp", "number": "СЧ-100"})
+    assert plain != renumbered
+
+
+def test_remind_requires_a_sent_proposal(public):
+    base, drafts = public
+    billable(drafts)
+    with pytest.raises(urllib.error.HTTPError) as error:
+        post(f"{base}/api/remind", {"slug": "kp"})
+    assert error.value.code == 400
+    assert "напоминать не о чем" in json.loads(error.value.read())["error"]
+
+
+def test_remind_dry_run_shows_the_letter(public):
+    base, drafts = public
+    record = billable(drafts)
+    record.delivery.mark_sent("client@example.com")
+    drafts.write("kp", record)
+
+    _, _, body = post(f"{base}/api/remind", {"slug": "kp", "dry_run": True})
+    answer = json.loads(body)
+
+    assert answer["to"] == "client@example.com"
+    assert answer["subject"].startswith("Напоминание")
+    assert "https://kp.example.test/p/" in answer["body"]
+    assert drafts.read("kp").delivery.reminders == 0
+
+
+def test_remind_without_a_draft_is_rejected(public):
+    base, _ = public
+    with pytest.raises(urllib.error.HTTPError) as error:
+        post(f"{base}/api/remind", {})
+    assert error.value.code == 400
+
+
+def test_draft_list_reports_silence(public):
+    from datetime import timedelta
+
+    from proposals.delivery import now
+
+    base, drafts = public
+    record = billable(drafts)
+    record.delivery.mark_sent("client@example.com")
+    record.delivery.sent_at = now() - timedelta(days=9)
+    drafts.write("kp", record)
+
+    _, _, body = get(f"{base}/api/drafts")
+    assert json.loads(body)["drafts"][0]["silent_days"] == 9
+
+    _, _, body = get(f"{base}/api/drafts/kp")
+    assert json.loads(body)["delivery"]["silent_days"] == 9
