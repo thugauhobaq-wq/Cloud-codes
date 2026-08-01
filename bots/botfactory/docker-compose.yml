@@ -1,0 +1,21 @@
+services:
+  botfactory:
+    build:
+      # Контекст на уровень выше: в образ нужен и botkit, лежащий рядом.
+      context: ..
+      dockerfile: botfactory/Dockerfile
+    container_name: botfactory
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Сгенерированные проекты и база живут вне контейнера: обновление
+      # образа не должно стирать историю сборок.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/botfactory.db
+      WORKDIR: /app/data/projects
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

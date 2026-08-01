@@ -12,6 +12,7 @@ from botkit.texts import (
     normalize_phone,
     plural,
     short,
+    translit,
 )
 
 
@@ -98,3 +99,10 @@ def test_a_single_line_longer_than_the_limit_is_cut():
     chunks = split_text("а" * (TEXT_LIMIT + 100))
     assert len(chunks) == 2
     assert len(chunks[0]) == TEXT_LIMIT
+
+
+def test_translit_gives_a_latin_name_for_a_russian_title():
+    assert translit("Магазин у дома") == "magazin u doma"
+    assert translit("Щёлочь, объезд") == "scheloch, obezd"
+    assert translit("Shop 2024") == "shop 2024"
+    assert translit("") == ""

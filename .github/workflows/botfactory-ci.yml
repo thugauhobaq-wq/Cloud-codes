@@ -1,0 +1,56 @@
+name: botfactory CI
+
+on:
+  push:
+    paths:
+      - 'bots/botfactory/**'
+      - 'bots/botkit/**'
+      - '.github/workflows/botfactory-ci.yml'
+  pull_request:
+    paths:
+      - 'bots/botfactory/**'
+      - 'bots/botkit/**'
+      - '.github/workflows/botfactory-ci.yml'
+
+defaults:
+  run:
+    working-directory: bots/botfactory
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: bots/botfactory/pyproject.toml
+
+      - name: Установить зависимости
+        # botkit не опубликован в PyPI и ставится из соседнего каталога.
+        run: |
+          pip install -e ../botkit
+          pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check src tests
+
+      - name: Тесты
+        # Ни сети, ни GitHub: «удалённый» репозиторий — каталог в tmp_path,
+        # API подменён заглушкой.
+        run: pytest -q
+        env:
+          # Токен из окружения раннера не должен подменять тестовый.
+          GITHUB_TOKEN: ''
+
+      - name: Проверить консольные команды
+        run: |
+          python -m botfactory builds
+          # Непонятный заказ — ненулевой код возврата и понятная строка,
+          # а не трейсбек.
+          if python -m botfactory make привет; then exit 1; fi
+        env:
+          DB_PATH: /tmp/ci-botfactory.db
+          GITHUB_TOKEN: ci-not-a-real-token
