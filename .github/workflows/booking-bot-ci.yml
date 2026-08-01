@@ -3,16 +3,16 @@ name: booking-bot CI
 on:
   push:
     paths:
-      - 'booking-bot/**'
+      - 'bots/booking-bot/**'
       - '.github/workflows/booking-bot-ci.yml'
   pull_request:
     paths:
-      - 'booking-bot/**'
+      - 'bots/booking-bot/**'
       - '.github/workflows/booking-bot-ci.yml'
 
 defaults:
   run:
-    working-directory: booking-bot
+    working-directory: bots/booking-bot
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: booking-bot/pyproject.toml
+          cache-dependency-path: bots/booking-bot/pyproject.toml
 
       - name: Установить зависимости
         run: pip install -e ".[dev]"

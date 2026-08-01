@@ -3,16 +3,16 @@ name: freelance-parser CI
 on:
   push:
     paths:
-      - 'freelance-parser/**'
+      - 'scripts/freelance-parser/**'
       - '.github/workflows/freelance-parser-ci.yml'
   pull_request:
     paths:
-      - 'freelance-parser/**'
+      - 'scripts/freelance-parser/**'
       - '.github/workflows/freelance-parser-ci.yml'
 
 defaults:
   run:
-    working-directory: freelance-parser
+    working-directory: scripts/freelance-parser
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: freelance-parser/pyproject.toml
+          cache-dependency-path: scripts/freelance-parser/pyproject.toml
 
       - name: Установить зависимости
         run: pip install -e ".[dev]"

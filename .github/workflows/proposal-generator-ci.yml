@@ -3,16 +3,16 @@ name: proposal-generator CI
 on:
   push:
     paths:
-      - 'proposal-generator/**'
+      - 'scripts/proposal-generator/**'
       - '.github/workflows/proposal-generator-ci.yml'
   pull_request:
     paths:
-      - 'proposal-generator/**'
+      - 'scripts/proposal-generator/**'
       - '.github/workflows/proposal-generator-ci.yml'
 
 defaults:
   run:
-    working-directory: proposal-generator
+    working-directory: scripts/proposal-generator
 
 jobs:
   test:
