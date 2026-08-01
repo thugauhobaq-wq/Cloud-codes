@@ -7,7 +7,9 @@
 from .broadcast import BLOCKED, FAILED, SENT, Broadcaster, Progress, Sender, telegram_sender
 from .config import BotSettings
 from .filters import IsAdmin, IsPrivate
+from .github import GitHub, GitHubError, Repo
 from .notify import Notifier
+from .publish import MODE_BRANCH, MODE_REPO, MODES, Published, PublishError, publish
 from .runner import make_bot, run_bot, setup_logging
 from .storage import BaseStorage, from_iso, now_iso, to_iso
 from .worker import PeriodicWorker
@@ -15,20 +17,29 @@ from .worker import PeriodicWorker
 __all__ = [
     "BLOCKED",
     "FAILED",
+    "MODES",
+    "MODE_BRANCH",
+    "MODE_REPO",
     "SENT",
     "BaseStorage",
     "BotSettings",
     "Broadcaster",
+    "GitHub",
+    "GitHubError",
     "IsAdmin",
     "IsPrivate",
     "Notifier",
     "PeriodicWorker",
     "Progress",
+    "PublishError",
+    "Published",
+    "Repo",
     "Sender",
     "__version__",
     "from_iso",
     "make_bot",
     "now_iso",
+    "publish",
     "run_bot",
     "setup_logging",
     "telegram_sender",
