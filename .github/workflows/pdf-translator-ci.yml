@@ -1,0 +1,99 @@
+name: pdf-translator CI
+
+on:
+  push:
+    paths:
+      - 'sites/pdf-translator/**'
+      - '.github/workflows/pdf-translator-ci.yml'
+  pull_request:
+    paths:
+      - 'sites/pdf-translator/**'
+      - '.github/workflows/pdf-translator-ci.yml'
+
+defaults:
+  run:
+    working-directory: sites/pdf-translator
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Шрифт с кириллицей
+        # Печатать перевод нечем, если в системе нет ни одного такого шрифта.
+        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
+      - name: Линтер
+        run: ruff check .
+
+      - name: Тесты
+        # Сеть в тестах не нужна: переводчик везде подменён заглушкой.
+        run: pytest -q
+
+      - name: Перевести файл без сети
+        # Проверяем всю цепочку целиком — от чтения PDF до сборки нового,
+        # подставив вместо переводчика заглушку.
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "tests")
+          from conftest import Builder, FakeTranslator
+          from pdftr.pdf.embed import find_family
+          from pdftr.pipeline import translate_document
+          from pdftr.translate.cache import Cache
+          from pdftr.translate.service import Service
+
+          doc = Builder(find_family())
+          doc.page([doc.text(60, 780, "Annual Report", 18),
+                    *doc.paragraph(60, 740, ["The system consists of several parts",
+                                             "and each part owns its own data."])])
+          source = doc.render()
+          Path("/tmp/source.pdf").write_bytes(source)
+
+          result = translate_document(
+              source, source="en", target="ru",
+              service=Service(Cache(None), FakeTranslator(), workers=1),
+          )
+          Path("/tmp/out.pdf").write_bytes(result.data)
+          assert result.data.startswith(b"%PDF"), "на выходе не PDF"
+          assert result.pages == 1 and result.blocks >= 2
+          print(f"переведено страниц: {result.pages}, абзацев: {result.blocks}")
+          PY
+          python -m pdftr inspect /tmp/out.pdf
+
+      - name: Проверить приложение и API
+        run: |
+          python -m pdftr serve --port 8099 --data /tmp/pdftr-data &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8099/api/config >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8099/ | grep -q '<title>' && echo "страница отдаётся"
+          curl -sf http://127.0.0.1:8099/manifest.webmanifest | grep -q share_target
+          curl -sf http://127.0.0.1:8099/sw.js >/dev/null && echo "service worker на месте"
+          curl -sf http://127.0.0.1:8099/api/jobs | grep -q '\[\]' && echo "очередь пуста"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать образ
+        run: docker build -t pdftr .
+      - name: Запустить и постучаться
+        run: |
+          docker run -d --name pdftr -p 8080:8080 pdftr
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/config >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/api/config | grep -q Русский
+          docker rm -f pdftr
