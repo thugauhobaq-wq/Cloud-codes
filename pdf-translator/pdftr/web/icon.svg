@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Перевод PDF">
+  <rect width="512" height="512" rx="112" fill="#111820"/>
+  <path d="M150 116h132l84 84v196a24 24 0 0 1-24 24H150a24 24 0 0 1-24-24V140a24 24 0 0 1 24-24z"
+        fill="#1d2a38" stroke="#4a9eff" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M282 116v84h84" fill="none" stroke="#4a9eff" stroke-width="16" stroke-linejoin="round"/>
+  <text x="196" y="330" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#e8edf3">A</text>
+  <text x="268" y="384" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#4a9eff">Я</text>
+  <path d="M186 350h150" stroke="#4a9eff" stroke-width="12" stroke-linecap="round"/>
+</svg>
