@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Перевод PDF">
+<title>Перевод PDF</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Перевод PDF</h1>
+  <button id="install" class="ghost" hidden>Установить</button>
+</header>
+
+<main>
+  <section class="card" id="picker">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="application/pdf,.pdf" multiple hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="drop-icon">
+        <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+      </svg>
+      <span class="drop-title">Выбрать PDF</span>
+      <span class="drop-hint">или перетащить сюда · можно несколько</span>
+    </label>
+
+    <div class="langs">
+      <div class="lang">
+        <span class="lang-label">С языка</span>
+        <select id="source" aria-label="Язык оригинала"></select>
+      </div>
+      <button id="swap" class="swap" title="Поменять языки" aria-label="Поменять языки">⇄</button>
+      <div class="lang">
+        <span class="lang-label">На язык</span>
+        <select id="target" aria-label="Язык перевода"></select>
+      </div>
+    </div>
+  </section>
+
+  <section id="uploads" class="uploads" hidden></section>
+
+  <section class="list">
+    <h2 id="list-title" hidden>Задачи</h2>
+    <div id="jobs"></div>
+    <p id="empty" class="empty">Пока пусто. Выберите PDF — перевод начнётся сам,
+      и приложение можно закрыть: работа идёт на сервере.</p>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<template id="job-template">
+  <article class="job">
+    <div class="job-head">
+      <div class="job-title">
+        <span class="job-name"></span>
+        <span class="job-meta"></span>
+      </div>
+      <button class="ghost job-remove" title="Удалить" aria-label="Удалить">✕</button>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="job-foot">
+      <span class="job-status"></span>
+      <span class="job-actions">
+        <a class="button job-open" hidden target="_blank" rel="noopener">Открыть</a>
+        <a class="button primary job-save" hidden download>Скачать</a>
+        <button class="button job-cancel" hidden>Отменить</button>
+      </span>
+    </div>
+  </article>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>
