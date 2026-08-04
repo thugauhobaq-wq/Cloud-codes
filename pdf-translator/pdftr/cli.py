@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -59,6 +60,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Точка входа команды `pdftr` и `python -m pdftr`."""
+    try:
+        return _dispatch(argv)
+    except KeyboardInterrupt:
+        return 130
+    except BrokenPipeError:
+        # Вывод оборвали через `| head` — это не ошибка. Поток надо подменить,
+        # иначе Python при выходе попробует дописать буфер и упадёт ещё раз.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
+
+
+def _dispatch(argv: list[str] | None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:
