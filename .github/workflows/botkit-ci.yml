@@ -3,16 +3,16 @@ name: botkit CI
 on:
   push:
     paths:
-      - 'botkit/**'
+      - 'bots/botkit/**'
       - '.github/workflows/botkit-ci.yml'
   pull_request:
     paths:
-      - 'botkit/**'
+      - 'bots/botkit/**'
       - '.github/workflows/botkit-ci.yml'
 
 defaults:
   run:
-    working-directory: botkit
+    working-directory: bots/botkit
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: botkit/pyproject.toml
+          cache-dependency-path: bots/botkit/pyproject.toml
 
       - name: Установить зависимости
         run: pip install -e ".[dev]"

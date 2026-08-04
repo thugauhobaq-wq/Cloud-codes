@@ -3,16 +3,16 @@ name: shop-bot CI
 on:
   push:
     paths:
-      - 'shop-bot/**'
+      - 'bots/shop-bot/**'
       - '.github/workflows/shop-bot-ci.yml'
   pull_request:
     paths:
-      - 'shop-bot/**'
+      - 'bots/shop-bot/**'
       - '.github/workflows/shop-bot-ci.yml'
 
 defaults:
   run:
-    working-directory: shop-bot
+    working-directory: bots/shop-bot
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: shop-bot/pyproject.toml
+          cache-dependency-path: bots/shop-bot/pyproject.toml
 
       - name: Установить зависимости
         run: pip install -e ".[dev]"

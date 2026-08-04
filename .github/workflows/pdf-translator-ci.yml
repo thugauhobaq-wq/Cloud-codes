@@ -3,16 +3,16 @@ name: pdf-translator CI
 on:
   push:
     paths:
-      - 'pdf-translator/**'
+      - 'sites/pdf-translator/**'
       - '.github/workflows/pdf-translator-ci.yml'
   pull_request:
     paths:
-      - 'pdf-translator/**'
+      - 'sites/pdf-translator/**'
       - '.github/workflows/pdf-translator-ci.yml'
 
 defaults:
   run:
-    working-directory: pdf-translator
+    working-directory: sites/pdf-translator
 
 jobs:
   test:

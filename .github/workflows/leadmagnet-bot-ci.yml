@@ -3,16 +3,16 @@ name: leadmagnet-bot CI
 on:
   push:
     paths:
-      - 'leadmagnet-bot/**'
+      - 'bots/leadmagnet-bot/**'
       - '.github/workflows/leadmagnet-bot-ci.yml'
   pull_request:
     paths:
-      - 'leadmagnet-bot/**'
+      - 'bots/leadmagnet-bot/**'
       - '.github/workflows/leadmagnet-bot-ci.yml'
 
 defaults:
   run:
-    working-directory: leadmagnet-bot
+    working-directory: bots/leadmagnet-bot
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: leadmagnet-bot/pyproject.toml
+          cache-dependency-path: bots/leadmagnet-bot/pyproject.toml
 
       - name: Установить зависимости
         run: pip install -e ".[dev]"

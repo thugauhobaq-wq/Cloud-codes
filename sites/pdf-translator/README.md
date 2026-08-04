@@ -195,6 +195,6 @@ ruff check .
 документом.
 
 Модули `pdftr/pdf/objects.py` и `pdftr/pdf/embed.py` перенесены из
-[`proposal-generator`](../proposal-generator/): там они собирают коммерческие
+[`proposal-generator`](../../scripts/proposal-generator/): там они собирают коммерческие
 предложения, здесь печатают перевод поверх чужой страницы. Логика оказалась
 одна и та же, менять её не пришлось.

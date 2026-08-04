@@ -3,18 +3,18 @@ name: reviews-widget CI
 on:
   push:
     paths:
-      - 'reviews-widget/**'
-      - 'reviews-dashboard/**'
+      - 'sites/reviews-widget/**'
+      - 'sites/reviews-dashboard/**'
       - '.github/workflows/reviews-widget-ci.yml'
   pull_request:
     paths:
-      - 'reviews-widget/**'
-      - 'reviews-dashboard/**'
+      - 'sites/reviews-widget/**'
+      - 'sites/reviews-dashboard/**'
       - '.github/workflows/reviews-widget-ci.yml'
 
 defaults:
   run:
-    working-directory: reviews-widget
+    working-directory: sites/reviews-widget
 
 jobs:
   test:
@@ -51,7 +51,7 @@ jobs:
         # так что связку двух проектов можно проверить без сети.
         working-directory: .
         run: |
-          cd reviews-dashboard
+          cd sites/reviews-dashboard
           python -m reviews collect --source demo --query "CI Кофейня" --limit 40
           cd ../reviews-widget
           python -m widget --db /tmp/ci.db site add --name "CI площадки"
@@ -77,7 +77,7 @@ jobs:
           node-version: '20'
 
       - name: Установить Playwright
-        working-directory: reviews-widget/tests/browser
+        working-directory: sites/reviews-widget/tests/browser
         run: |
           npm install --no-audit --no-fund
           npx playwright install --with-deps chromium
@@ -103,5 +103,5 @@ jobs:
           done
 
       - name: Браузерный смоук
-        working-directory: reviews-widget/tests/browser
+        working-directory: sites/reviews-widget/tests/browser
         run: node smoke.mjs http://127.0.0.1:8099 "$WIDGET_KEY" "$WIDGET_TOKEN"
