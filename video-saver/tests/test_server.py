@@ -181,7 +181,16 @@ class TestCreate:
         )
         assert payload["quality"] == "1080"
 
-    def test_rate_limit_answers_429(self, site, limits):
+    def test_hourly_limit_answers_429(self, site, limits):
+        """Часовой лимит.
+
+        Потолок одновременных закачек поднят намеренно. Он проверяется раньше
+        часового, и если оставить оба низкими, исход зависит от того, успела ли
+        заглушка добежать до конца между запросами: на быстрой машине сработает
+        часовой лимит, на медленном раннере — потолок одновременных. Такой тест
+        падает через раз, поэтому потолки разведены по разным проверкам.
+        """
+        site["app"].limits.per_ip_active = 100
         client = site["client"]
         last = None
         for number in range(limits.per_hour + 2):
@@ -192,6 +201,29 @@ class TestCreate:
         assert response.status == 429
         assert response.headers.get("Retry-After")
         assert "час" in payload["error"]
+
+    def test_concurrent_limit_answers_429(self, site, limits):
+        """Потолок одновременных закачек — обратный случай.
+
+        Часовой лимит поднят, а закачка задержана затвором, чтобы задачи
+        гарантированно висели в работе к моменту третьего запроса.
+        """
+        site["app"].limits.per_hour = 1000
+        gate = threading.Event()
+        site["downloader"].block = gate
+        client = site["client"]
+        try:
+            last = None
+            for number in range(limits.per_ip_active + 2):
+                last = client.json("POST", "/api/jobs", {"url": f"https://example.com/{number}"})
+                if last[0].status == 429:
+                    break
+            response, payload = last
+            assert response.status == 429
+            assert "в работе" in payload["error"]
+        finally:
+            # Иначе заглушка будет досиживать свой таймаут на каждом шаге.
+            gate.set()
 
 
 class TestMyJobs:

@@ -94,8 +94,17 @@ class TestGuardQueue:
         guard = Guard(store, limits)
         for _ in range(limits.per_ip_active):
             store.create("https://example.com/v", ip="1.2.3.4")
-        with pytest.raises(LimitError, match="уже качается"):
+        with pytest.raises(LimitError, match="в работе"):
             guard.check_new_job("1.2.3.4")
+
+    def test_queued_jobs_count_as_in_progress(self, store, limits):
+        """Задача в очереди ещё не качается, но место в лимите уже занимает —
+        и в тексте отказа это должно называться честно."""
+        for _ in range(limits.per_ip_active):
+            store.create("https://example.com/v", ip="1.2.3.4")
+        with pytest.raises(LimitError) as error:
+            Guard(store, limits).check_new_job("1.2.3.4")
+        assert "качается" not in str(error.value)
 
     def test_queue_length(self, store, limits):
         guard = Guard(store, limits)

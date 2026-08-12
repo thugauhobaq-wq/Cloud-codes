@@ -157,9 +157,12 @@ class Guard:
         if ip:
             active = self.store.count_active(ip=ip)
             if active >= limits.per_ip_active:
+                # «В работе», а не «качается»: сюда попадают и те задачи, что
+                # пока стоят в очереди и ещё не начинались.
+                shtuki = plural(active, "ролик", "ролика", "роликов")
                 raise LimitError(
-                    f"у вас уже качается {active} — дождитесь, пожалуйста, "
-                    "и поставьте следующее.",
+                    f"у вас уже {active} {shtuki} в работе — дождитесь, "
+                    "пожалуйста, и поставьте следующий.",
                     retry_after=30,
                 )
             if self.rate.count(ip) >= limits.per_hour:
