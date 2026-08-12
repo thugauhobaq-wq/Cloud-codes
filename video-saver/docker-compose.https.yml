@@ -1,0 +1,50 @@
+# Тот же сервис, но с доменом и настоящим HTTPS.
+#
+# Caddy получает сертификат Let's Encrypt сам, продлевает его сам и сам
+# перенаправляет http на https. От вас нужны две вещи: домен с A-записью на IP
+# этого сервера и открытые порты 80 и 443.
+#
+#   VSAVER_DOMAIN=video.example.com \
+#   VSAVER_EMAIL=you@example.com \
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+#
+# Порт 8080 наружу больше не смотрит: снаружи доступен только Caddy.
+
+services:
+  vsaver:
+    ports: !override []
+    command:
+      - serve
+      - --host=0.0.0.0
+      - --port=8080
+      - --data=/data
+      - --workers=2
+      - --per-hour=10
+      - --per-ip-active=2
+      - --queue-length=40
+      - --max-size=2
+      - --max-duration=180
+      - --disk-quota=40
+      - --keep-hours=4
+      # Впереди Caddy — настоящий адрес посетителя приходит в заголовке.
+      - --behind-proxy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - vsaver
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      VSAVER_DOMAIN: ${VSAVER_DOMAIN:?укажите домен, например video.example.com}
+      VSAVER_EMAIL: ${VSAVER_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

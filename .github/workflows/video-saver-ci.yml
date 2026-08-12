@@ -1,0 +1,127 @@
+name: video-saver CI
+
+on:
+  push:
+    paths:
+      - 'video-saver/**'
+      - '.github/workflows/video-saver-ci.yml'
+  pull_request:
+    paths:
+      - 'video-saver/**'
+      - '.github/workflows/video-saver-ci.yml'
+
+defaults:
+  run:
+    working-directory: video-saver
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check .
+
+      - name: Тесты
+        # Сети в тестах нет: загрузчик везде подменён заглушкой.
+        run: pytest -q
+
+      - name: Проверить сайт и API
+        run: |
+          # Потолок одновременных задач поднят намеренно: иначе в 429 упрёмся
+          # из-за него, а проверить надо именно лимит частоты.
+          python -m vsaver serve --port 8099 --data /tmp/vsaver \
+            --per-hour 3 --per-ip-active 20 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8099/api/config >/dev/null && break
+            sleep 1
+          done
+
+          curl -sf http://127.0.0.1:8099/ | grep -q '<title>' && echo "страница отдаётся"
+          curl -sf http://127.0.0.1:8099/sw.js >/dev/null && echo "service worker на месте"
+          curl -sf http://127.0.0.1:8099/manifest.webmanifest >/dev/null
+
+          # Сайт открытый: список задач доступен без всякого входа.
+          curl -sf http://127.0.0.1:8099/api/jobs | grep -q '\[\]' && echo "очередь пуста"
+
+          # Ссылку внутрь своей сети сервер брать не должен.
+          code=$(curl -s -o /tmp/ssrf.json -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"http://169.254.169.254/latest/meta-data/"}' \
+            http://127.0.0.1:8099/api/jobs)
+          test "$code" = "400" && echo "адрес внутри сети отклонён"
+          grep -q "внутрь сети" /tmp/ssrf.json
+
+          # Лимит частоты: с четвёртой попытки должен прийти 429.
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' \
+              -d "{\"url\":\"https://example.com/$i\"}" \
+              http://127.0.0.1:8099/api/jobs)
+            echo "попытка $i: $code"
+            if [ "$code" = "429" ]; then
+              echo "лимит частоты сработал"
+              exit 0
+            fi
+          done
+          echo "лимит частоты не сработал" && exit 1
+
+      - name: Проверить перемотку в отданном файле
+        # Range нужен плееру, чтобы перематывать видео, и докачке — чтобы не
+        # начинать заново. Проверяем без сети: кладём готовый файл в хранилище.
+        run: |
+          python - <<'PY'
+          import json, threading, urllib.request
+          from http.server import ThreadingHTTPServer
+          from pathlib import Path
+
+          from vsaver.server import Application, Handler
+          from vsaver.store import DONE
+
+          app = Application("/tmp/vsaver-range")
+          handler = type("Bound", (Handler,), {"app": app})
+          server = ThreadingHTTPServer(("127.0.0.1", 8098), handler)
+          threading.Thread(target=server.serve_forever, daemon=True).start()
+
+          job = app.store.create("https://example.com/v")
+          app.store.update(job.id, status=DONE, title="Ролик", ext="mp4", total=1000)
+          app.store.file_path(job.id, "mp4").write_bytes(bytes(range(256)) * 4)
+
+          request = urllib.request.Request(f"http://127.0.0.1:8098/api/jobs/{job.id}/file")
+          request.add_header("Range", "bytes=10-109")
+          with urllib.request.urlopen(request, timeout=5) as answer:
+              assert answer.status == 206, answer.status
+              assert answer.headers["Content-Range"] == "bytes 10-109/1024"
+              assert len(answer.read()) == 100
+          print("Range работает: 206 и Content-Range на месте")
+
+          server.shutdown()
+          app.stop()
+          PY
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать образ
+        run: docker build -t vsaver .
+      - name: Запустить и постучаться
+        run: |
+          docker run -d --name vsaver -p 8080:8080 vsaver
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/config >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/api/config | grep -q maxSize
+          # ffmpeg обязателен: без него у видео с YouTube не будет звука.
+          docker exec vsaver ffmpeg -version | head -1
+          docker exec vsaver python -c "import yt_dlp; print('yt-dlp', yt_dlp.version.__version__)"
+          docker rm -f vsaver

@@ -1,0 +1,36 @@
+# Обратный прокси с автоматическим HTTPS. Домен и почта приезжают из окружения
+# (см. docker-compose.https.yml). Почта нужна Let's Encrypt, чтобы предупредить,
+# если с сертификатом что-то не так; без неё тоже работает.
+
+{
+	email {$VSAVER_EMAIL}
+}
+
+{$VSAVER_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy vsaver:8080 {
+		# Прогресс идёт потоком Server-Sent Events: буферизация ответа его
+		# ломает — проценты приезжали бы пачкой в самом конце.
+		flush_interval -1
+
+		# Закачка гигабайтного файла на медленном телефоне идёт долго,
+		# и обрывать её по таймауту нельзя.
+		transport http {
+			response_header_timeout 5m
+			read_timeout 2h
+		}
+	}
+
+	# Тело запроса у нас всегда крошечное — это JSON со ссылкой. Заодно отсекаем
+	# попытки залить что-нибудь своё.
+	request_body {
+		max_size 64KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+}

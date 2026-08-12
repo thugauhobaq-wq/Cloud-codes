@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<meta name="description" content="Скачать видео по ссылке: вставьте адрес ролика и заберите файл.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Скачать видео">
+<title>Скачать видео по ссылке</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Скачать видео</h1>
+  <button id="install" class="ghost" hidden>Установить</button>
+</header>
+
+<main>
+  <section class="card">
+    <form id="form" autocomplete="off">
+      <div class="field">
+        <input id="url" name="url" type="url" inputmode="url" spellcheck="false"
+               placeholder="Вставьте ссылку на видео" aria-label="Ссылка на видео" required>
+        <button id="paste" type="button" class="ghost paste" hidden
+                title="Вставить из буфера">Вставить</button>
+      </div>
+
+      <div class="options">
+        <div class="segment" role="radiogroup" aria-label="Что скачать">
+          <label><input type="radio" name="kind" value="video" checked><span>Видео</span></label>
+          <label><input type="radio" name="kind" value="audio"><span>Только звук</span></label>
+        </div>
+        <label class="quality" id="quality-box">
+          <span>Качество</span>
+          <select id="quality" aria-label="Качество видео"></select>
+        </label>
+      </div>
+
+      <button id="go" type="submit" class="button primary wide">Скачать</button>
+    </form>
+    <p class="hint" id="hint"></p>
+  </section>
+
+  <section class="list">
+    <h2 id="list-title" hidden>Ваши закачки</h2>
+    <div id="jobs"></div>
+    <p id="empty" class="empty">Вставьте ссылку на ролик — сервер скачает его к себе
+      и отдаст готовый файл. Страницу можно закрыть: работа идёт на сервере.</p>
+  </section>
+
+  <section class="note">
+    <p>Скачивайте только то, на что у вас есть право: свои ролики, свободный
+      контент и материалы с разрешения автора. Права на чужое видео остаются у
+      его правообладателя, и правила площадок никто не отменял.</p>
+    <p id="keep-note"></p>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<template id="job-template">
+  <article class="job">
+    <div class="job-head">
+      <div class="job-title">
+        <span class="job-name"></span>
+        <span class="job-meta"></span>
+      </div>
+      <button class="ghost job-remove" title="Убрать" aria-label="Убрать">✕</button>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="job-foot">
+      <span class="job-status"></span>
+      <span class="job-actions">
+        <button class="button job-preview" hidden>Посмотреть</button>
+        <a class="button primary job-save" hidden download>Сохранить файл</a>
+        <button class="button job-cancel" hidden>Отменить</button>
+      </span>
+    </div>
+    <div class="player" hidden></div>
+  </article>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>

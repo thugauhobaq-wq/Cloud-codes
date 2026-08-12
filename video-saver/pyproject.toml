@@ -1,0 +1,46 @@
+[project]
+name = "video-saver"
+version = "1.0.0"
+description = "Сайт для скачивания видео по ссылке: очередь, прогресс и лимиты"
+readme = "README.md"
+requires-python = ">=3.11"
+# Единственная зависимость и единственный отход от правила «только стандартная
+# библиотека», принятого в остальных проектах репозитория. Разбирать чужие
+# видеоплощадки своими руками бессмысленно: они меняются каждый месяц. Нижняя
+# граница версии не случайна — площадки ломают старые выпуски, и слишком
+# древний yt-dlp просто ничего не скачает.
+dependencies = ["yt-dlp>=2024.8.6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+vsaver = "vsaver.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vsaver*"]
+
+[tool.setuptools.package-data]
+vsaver = ["web/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # кириллица в строках — интерфейс русскоязычный
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # sys.path в conftest настраивается до импортов пакета
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
