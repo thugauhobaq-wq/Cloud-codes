@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Скачать видео">
+  <rect width="512" height="512" rx="112" fill="#111820"/>
+  <rect x="96" y="112" width="320" height="200" rx="24" fill="#1d2a38" stroke="#4a9eff" stroke-width="16"/>
+  <path d="M228 172v80l72-40z" fill="#4a9eff"/>
+  <path d="M256 316v96m0 0 40-40m-40 40-40-40" fill="none" stroke="#4a9eff" stroke-width="22"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

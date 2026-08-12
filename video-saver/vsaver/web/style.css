@@ -1,0 +1,378 @@
+/* Оформление. Тёмная тема одна на всех: сайт про видео, светлый фон рядом с
+   плеером режет глаза, а переключатель — лишняя кнопка на странице, где всего
+   одно поле ввода. */
+
+:root {
+  --bg: #0f1216;
+  --card: #161b22;
+  --line: #232a33;
+  --text: #e8edf3;
+  --dim: #9aa7b4;
+  --accent: #4a9eff;
+  --ok: #3fbf7f;
+  --bad: #ff6b6b;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px calc(32px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.top {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: calc(20px + env(safe-area-inset-top)) 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 24px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+
+/* --- форма --------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+input[type="url"] {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 14px;
+  font-size: 16px; /* меньше — и Safari на iPhone зумит страницу при фокусе */
+  color: var(--text);
+  background: #0e1319;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+}
+
+input[type="url"]:focus {
+  border-color: var(--accent);
+}
+
+input[type="url"]::placeholder {
+  color: #6d7986;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.segment {
+  display: inline-flex;
+  background: #0e1319;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.segment label {
+  cursor: pointer;
+}
+
+.segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment span {
+  display: block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.segment input:checked + span {
+  background: #1f2833;
+  color: var(--text);
+}
+
+.segment input:focus-visible + span {
+  outline: 2px solid var(--accent);
+}
+
+.quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--dim);
+}
+
+select {
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: #0e1319;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* --- кнопки -------------------------------------------------------------- */
+
+.button,
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.button {
+  display: inline-block;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 550;
+  text-align: center;
+  text-decoration: none;
+  color: var(--text);
+  background: #1f2833;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #08111c;
+}
+
+.button.wide {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghost {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.ghost:hover {
+  color: var(--text);
+}
+
+.paste {
+  flex: 0 0 auto;
+}
+
+/* --- список задач -------------------------------------------------------- */
+
+.job {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.job-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.job-title {
+  min-width: 0;
+}
+
+.job-name {
+  display: block;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.job-remove {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  line-height: 1.2;
+}
+
+.bar {
+  height: 4px;
+  margin: 12px 0 10px;
+  background: #0e1319;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.job[data-status="done"] .bar i {
+  background: var(--ok);
+}
+
+.job[data-status="failed"] .bar i {
+  background: var(--bad);
+}
+
+.job[data-status="done"] .bar,
+.job[data-status="cancelled"] .bar,
+.job[data-status="failed"] .bar {
+  display: none;
+}
+
+.job-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.job-status {
+  font-size: 13px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.job[data-status="failed"] .job-status {
+  color: var(--bad);
+}
+
+.job-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.player {
+  margin-top: 12px;
+}
+
+.player video,
+.player audio {
+  width: 100%;
+  border-radius: 10px;
+  background: #000;
+}
+
+.empty {
+  margin: 24px 0;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+/* --- подвал -------------------------------------------------------------- */
+
+.note {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.note p {
+  margin: 0 0 8px;
+}
+
+/* --- всплывающее сообщение ------------------------------------------------ */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(600px, calc(100vw - 32px));
+  padding: 12px 16px;
+  background: #1f2833;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 45%);
+  font-size: 14px;
+  z-index: 10;
+}
+
+@media (max-width: 480px) {
+  .options {
+    justify-content: space-between;
+  }
+
+  .job-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .job-actions .button {
+    flex: 1;
+  }
+}
