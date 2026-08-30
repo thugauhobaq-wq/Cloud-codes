@@ -3,12 +3,20 @@ from __future__ import annotations
 import compileall
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from botkit.__main__ import main
-from botkit.scaffold import LAYOUT, ScaffoldError, check_package_name, create_project, render
+from botkit.scaffold import (
+    LAYOUT,
+    VENDOR_DIR,
+    ScaffoldError,
+    check_package_name,
+    create_project,
+    render,
+)
 
 
 def test_project_is_created_with_every_file(tmp_path: Path):
@@ -110,3 +118,93 @@ def test_cli_reports_a_bad_name_without_a_traceback(tmp_path: Path, capsys):
 
     assert code == 1
     assert "Не получилось" in capsys.readouterr().out
+
+
+# ── автономный репозиторий ────────────────────────────────────────────────
+
+
+def test_standalone_project_carries_a_copy_of_botkit(tmp_path: Path):
+    """Отдельный репозиторий уезжает к заказчику один: botkit должен быть внутри."""
+    project = create_project("shop", parent=tmp_path, standalone=True)
+
+    vendor = project.directory / VENDOR_DIR
+    assert (vendor / "src" / "botkit" / "__init__.py").is_file()
+    assert (vendor / "src" / "botkit" / "storage.py").is_file()
+    # Без README сборка копии падает: hatchling требует файл из поля readme.
+    assert (vendor / "pyproject.toml").is_file()
+    assert (vendor / "README.md").is_file()
+
+
+def test_standalone_build_files_do_not_look_outside_the_repository(tmp_path: Path):
+    """Именно на этом ломалась передача: сборка искала botkit уровнем выше."""
+    project = create_project("shop", parent=tmp_path, standalone=True)
+
+    dockerfile = (project.directory / "Dockerfile").read_text(encoding="utf-8")
+    compose = (project.directory / "docker-compose.yml").read_text(encoding="utf-8")
+    workflow = (project.directory / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "COPY vendor/botkit" in dockerfile
+    assert "COPY botkit " not in dockerfile
+    assert "context: ." in compose and "context: .." not in compose
+    assert "../botkit" not in workflow
+
+
+def test_standalone_readme_points_inside_the_project(tmp_path: Path):
+    project = create_project("shop", parent=tmp_path, standalone=True)
+
+    readme = (project.directory / "README.md").read_text(encoding="utf-8")
+
+    assert f"pip install -e {VENDOR_DIR}" in readme
+    assert "../botkit" not in readme
+
+
+def test_vendored_botkit_is_valid_python_and_declares_its_dependencies(tmp_path: Path):
+    project = create_project("shop", parent=tmp_path, standalone=True)
+    vendor = project.directory / VENDOR_DIR
+
+    assert compileall.compile_dir(str(vendor / "src"), quiet=2)
+    manifest = tomllib.loads((vendor / "pyproject.toml").read_text(encoding="utf-8"))
+    assert manifest["project"]["name"] == "botkit"
+    assert any("aiogram" in item for item in manifest["project"]["dependencies"])
+    assert manifest["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == ["src/botkit"]
+
+
+def test_ordinary_project_stays_without_a_copy(tmp_path: Path):
+    """В монорепозитории копия не нужна: botkit лежит рядом, дублировать вредно."""
+    project = create_project("shop", parent=tmp_path)
+
+    assert not (project.directory / "vendor").exists()
+    assert "COPY botkit" in (project.directory / "Dockerfile").read_text(encoding="utf-8")
+
+
+def test_regenerating_replaces_the_copy_instead_of_mixing_versions(tmp_path: Path):
+    project = create_project("shop", parent=tmp_path, standalone=True)
+    stale = project.directory / VENDOR_DIR / "src" / "botkit" / "outdated.py"
+    stale.write_text("# остаток прошлой версии", encoding="utf-8")
+
+    create_project("shop", parent=tmp_path, standalone=True, force=True)
+
+    assert not stale.exists()
+
+
+def test_pyproject_for_the_copy_is_built_from_package_metadata(tmp_path: Path, monkeypatch):
+    """Когда botkit поставлен колесом, исходного pyproject.toml рядом нет."""
+    monkeypatch.setattr("botkit.scaffold.botkit_root", lambda: None)
+
+    project = create_project("shop", parent=tmp_path, standalone=True)
+
+    manifest = tomllib.loads(
+        (project.directory / VENDOR_DIR / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert manifest["project"]["version"]
+    assert any("aiogram" in item for item in manifest["project"]["dependencies"])
+    # Наборы для разработки копии не нужны — она ставится как библиотека.
+    assert not any("pytest" in item for item in manifest["project"]["dependencies"])
+
+
+def test_cli_makes_a_standalone_project(tmp_path: Path, capsys):
+    code = main(["new", "shop", "--dir", str(tmp_path), "--standalone"])
+
+    assert code == 0
+    assert (tmp_path / "shop-bot" / VENDOR_DIR / "pyproject.toml").is_file()
+    assert VENDOR_DIR in capsys.readouterr().out

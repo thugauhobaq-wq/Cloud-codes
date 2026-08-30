@@ -34,6 +34,43 @@ async def test_new_repository_gets_a_working_project(settings: Settings, github:
     assert ".github/workflows/ci.yml" in published
 
 
+async def test_published_repository_is_self_contained(settings: Settings, github: Path):
+    """Покупатель клонирует репозиторий один — botkit рядом у него не лежит.
+
+    Именно на этом сборка у заказчика падала: Dockerfile искал каркас
+    уровнем выше, а в отдельном репозитории там ничего нет.
+    """
+    order = Order(package="shop", title="Магазин у дома", mode=MODE_REPO)
+
+    await Factory(settings, api=FakeGitHub(github)).build(order)
+
+    published = files_in(github)
+    assert "vendor/botkit/src/botkit/__init__.py" in published
+    assert "vendor/botkit/pyproject.toml" in published
+    assert "vendor/botkit/README.md" in published
+
+
+async def test_published_repository_builds_from_its_own_root(settings: Settings, github: Path):
+    order = Order(package="shop", title="Магазин", mode=MODE_REPO)
+
+    result = await Factory(settings, api=FakeGitHub(github)).build(order)
+
+    dockerfile = (result.directory / "Dockerfile").read_text(encoding="utf-8")
+    compose = (result.directory / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "COPY vendor/botkit" in dockerfile
+    assert "context: .." not in compose
+
+
+async def test_branch_mode_keeps_the_shared_botkit(settings: Settings, remote: Path):
+    """В общем репозитории botkit уже есть — копия только дублировала бы код."""
+    order = Order(package="shop", title="Магазин", mode=MODE_BRANCH)
+
+    result = await Factory(settings).build(order)
+
+    assert not (result.directory / "vendor").exists()
+    assert "shop-bot/vendor/botkit/pyproject.toml" not in files_in(remote, "bot/shop-bot")
+
+
 async def test_branch_mode_puts_the_bot_into_the_existing_repository(
     settings: Settings, remote: Path, repo_root: Path
 ):

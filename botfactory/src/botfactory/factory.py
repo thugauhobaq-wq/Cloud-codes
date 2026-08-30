@@ -80,6 +80,9 @@ class Factory:
                 # Повторный заказ того же бота перезаписывает свой же код, но
                 # чужие файлы в каталоге не трогает.
                 force=True,
+                # Отдельный репозиторий уезжает к заказчику один, без botkit
+                # рядом, поэтому каркас кладётся внутрь проекта.
+                standalone=order.mode == MODE_REPO,
             )
         except ScaffoldError as exc:
             raise FactoryError(str(exc)) from None

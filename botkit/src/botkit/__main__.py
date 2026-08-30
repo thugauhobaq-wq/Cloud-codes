@@ -45,6 +45,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     new.add_argument(
         "--force", action="store_true", help="перезаписать код в существующем каталоге"
     )
+    new.add_argument(
+        "--standalone",
+        action="store_true",
+        help="положить копию botkit в vendor/ — проект собирается сам по себе "
+        f"(включается само при --push {MODE_REPO})",
+    )
     add_publish_options(new)
 
     ship = sub.add_parser("publish", help="отправить готовый проект в GitHub")
@@ -70,12 +76,15 @@ def do_publish(directory: Path, args: argparse.Namespace, title: str) -> Publish
 
 
 def command_new(args: argparse.Namespace) -> int:
+    # Отдельный репозиторий обязан быть самодостаточным: botkit не в PyPI, и
+    # без копии внутри такой репозиторий не собрался бы ни у кого.
     project: Project = create_project(
         args.package,
         parent=Path(args.dir),
         directory=args.project,
         title=args.title,
         force=args.force,
+        standalone=args.standalone or args.push == MODE_REPO,
     )
     print(next_steps(project))
 
