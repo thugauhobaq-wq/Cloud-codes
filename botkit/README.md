@@ -144,7 +144,8 @@ assert progress.sent == 1 and progress.blocked == 1
 ## Генератор
 
 ```
-python -m botkit new <пакет> [--dir .] [--project имя-каталога] [--title "Название"] [--force]
+python -m botkit new <пакет> [--dir .] [--project имя] [--title "Название"]
+                           [--force] [--standalone]
 ```
 
 - `<пакет>` — имя импорта: `shop`, `booking`, `lead_magnet`. Дефис
@@ -153,6 +154,8 @@ python -m botkit new <пакет> [--dir .] [--project имя-каталога] 
 - каталог по умолчанию — `<пакет>-bot`.
 - `--force` перезаписывает сгенерированный код, но чужие файлы в каталоге не
   трогает.
+- `--standalone` кладёт копию botkit в `vendor/botkit` и настраивает на неё
+  Dockerfile, compose и CI. Включается само при `--push repo`.
 
 Что создаётся:
 
@@ -168,6 +171,36 @@ shop-bot/
 
 Сгенерированный проект ставит botkit из исходников (`pip install -e ../botkit`) —
 в PyPI он не опубликован. Это же учтено в его Dockerfile и workflow CI.
+
+### Автономный проект
+
+Раскладка по умолчанию рассчитана на этот репозиторий: botkit лежит рядом с
+ботом, Dockerfile собирается из каталога уровнем выше. Отдельный репозиторий
+так не соберётся ни у кого, кроме автора — рядом с ним botkit нет.
+
+Поэтому `--standalone` (и `--push repo`, где он включается сам) кладёт копию
+каркаса внутрь проекта:
+
+```
+shop-bot/
+  vendor/botkit/          копия каркаса: pyproject.toml, README.md, src/botkit/
+  Dockerfile              COPY vendor/botkit — контекст сборки свой корень
+  docker-compose.yml      context: .
+  .github/workflows/ci.yml
+```
+
+Тогда путь получателя — три команды в пустом каталоге:
+
+```bash
+git clone <репозиторий> && cd shop-bot
+pip install -e vendor/botkit && pip install -e ".[dev]"
+docker compose up -d --build
+```
+
+Копия, а не зависимость, сделана осознанно: у заказчика ничего не сломается
+от правок botkit, и ему не нужен доступ к вашим репозиториям. Обратная
+сторона — исправления каркаса к уже проданным ботам сами не доедут; чтобы
+обновить, перегенерируйте проект с `--force`.
 
 ## Публикация в GitHub
 

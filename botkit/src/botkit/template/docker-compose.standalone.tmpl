@@ -1,0 +1,22 @@
+services:
+  {{pkg}}:
+    build:
+      # Всё нужное лежит в этом репозитории, включая vendor/botkit, поэтому
+      # контекст — его корень, а не каталог уровнем выше.
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{project}}
+    # Пропущенный час — это неотвеченные заявки, поэтому сервис должен
+    # пережить и падение, и перезагрузку сервера.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # База живёт вне контейнера: обновление образа не должно стирать заявки.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/{{pkg}}.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

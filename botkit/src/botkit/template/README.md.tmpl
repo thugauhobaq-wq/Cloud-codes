@@ -1,6 +1,6 @@
 # {{title}}
 
-Бот приёма заявок на aiogram 3 и [botkit](../botkit/). Сгенерирован командой
+Бот приёма заявок на aiogram 3 и [botkit]({{botkit_link}}). Сгенерирован командой
 `python -m botkit new {{pkg}}` — дальше правится под задачу.
 
 ```
@@ -39,7 +39,7 @@
 
 ```bash
 cp .env.example .env      # впишите BOT_TOKEN и OWNER_ID
-pip install -e ../botkit  # каркас
+{{botkit_install}}
 pip install -e ".[dev]"
 pytest -q
 python -m {{pkg}} run
@@ -56,7 +56,7 @@ python -m {{pkg}} requests --all
 python -m {{pkg}} stats 7
 ```
 
-В Docker (собирается из каталога, где лежат и botkit, и этот проект):
+В Docker{{docker_note}}:
 
 ```bash
 docker compose up -d --build
@@ -89,7 +89,7 @@ src/{{pkg}}/
     admin.py    заявки, статистика, рассылка
 ```
 
-Из [botkit](../botkit/) берутся: настройки с разбором `ADMIN_IDS`, хранилище с
+Из [botkit]({{botkit_link}}) берутся: настройки с разбором `ADMIN_IDS`, хранилище с
 транзакциями, уведомления, движок рассылки, каркас воркера и запуск с
 корректной остановкой по SIGTERM.
 

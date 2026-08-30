@@ -48,3 +48,18 @@ jobs:
           python -m demo stats 7
         env:
           DB_PATH: /tmp/ci-demo.db
+
+      - name: Проверить автономный проект
+        # Так его получает покупатель: репозиторий один, botkit рядом не
+        # лежит. Ставим в чистое окружение — иначе сборка у заказчика падает,
+        # а у автора всё работает.
+        run: |
+          python -m botkit new solo --dir /tmp --standalone --title "Автономный"
+          cd /tmp/solo-bot
+          python -m venv .venv
+          .venv/bin/pip install --quiet ./vendor/botkit
+          .venv/bin/pip install --quiet ".[dev]"
+          .venv/bin/python -m pytest -q
+          .venv/bin/python -m solo stats 7
+        env:
+          DB_PATH: /tmp/ci-solo.db
