@@ -17,12 +17,22 @@ on:
         required: true
         type: choice
         options:
+          - create       # создать новый репозиторий
           - private      # скрыть: пропадёт из профиля и поиска
           - public       # вернуть в публичные
           - archive      # заморозить: read-only, плашка "archived"
           - unarchive    # разморозить
           - transfer     # отправить другому владельцу
           - delete       # удалить безвозвратно
+      private:
+        description: 'Только для create: делать приватным'
+        required: false
+        default: true
+        type: boolean
+      repo_description:
+        description: 'Только для create: описание репозитория'
+        required: false
+        type: string
       new_owner:
         description: 'Новый владелец — только для transfer'
         required: false
@@ -46,6 +56,8 @@ jobs:
           CONTROL_REPO: ${{ github.event.repository.name }}
           REPO: ${{ inputs.repo }}
           ACTION: ${{ inputs.action }}
+          PRIVATE: ${{ inputs.private }}
+          REPO_DESCRIPTION: ${{ inputs.repo_description }}
           NEW_OWNER: ${{ inputs.new_owner }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
@@ -64,6 +76,29 @@ jobs:
           esac
 
           FULL="$OWNER/$REPO"
+
+          # create стоит особняком: репозитория ещё нет, проверять нечего
+          if [ "$ACTION" = "create" ]; then
+            if gh api "repos/$FULL" --jq '.full_name' > /dev/null 2>&1; then
+              echo "::error::Репозиторий $FULL уже существует."
+              exit 1
+            fi
+            gh api -X POST user/repos \
+              -f name="$REPO" \
+              -F private="${PRIVATE:-true}" \
+              -F auto_init=true \
+              -f description="${REPO_DESCRIPTION:-}" \
+              --silent
+            {
+              echo "### Repo admin"
+              echo ""
+              echo "- Создан: \`$FULL\`"
+              echo "- Видимость: \`$(gh api "repos/$FULL" --jq '.visibility')\`"
+              echo "- https://github.com/$FULL"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "Создан $FULL"
+            exit 0
+          fi
 
           # Защита от того, чтобы workflow снёс сам себя
           if [ "$REPO" = "$CONTROL_REPO" ]; then
