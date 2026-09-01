@@ -208,3 +208,27 @@ def test_cli_makes_a_standalone_project(tmp_path: Path, capsys):
     assert code == 0
     assert (tmp_path / "shop-bot" / VENDOR_DIR / "pyproject.toml").is_file()
     assert VENDOR_DIR in capsys.readouterr().out
+
+
+def test_entrypoint_is_generated_and_wired(tmp_path: Path):
+    """Без него бот в контейнере не сможет писать в смонтированный /app/data."""
+    project = create_project("shop", parent=tmp_path)
+    entrypoint = project.directory / "docker-entrypoint.sh"
+
+    assert entrypoint.exists()
+    # Понижение привилегий через setpriv: runuser и su заводят сессию с
+    # собственным шеллом, который съедает вывод и глушит SIGTERM.
+    assert "setpriv" in entrypoint.read_text()
+
+    dockerfile = (project.directory / "Dockerfile").read_text()
+    assert "docker-entrypoint.sh" in dockerfile
+    assert 'ENTRYPOINT ["docker-entrypoint.sh"]' in dockerfile
+
+
+def test_standalone_dockerfile_copies_entrypoint_from_its_own_root(tmp_path: Path):
+    """У автономного проекта контекст сборки — его корень, без префикса каталога."""
+    project = create_project("solo", parent=tmp_path, standalone=True)
+    dockerfile = (project.directory / "Dockerfile").read_text()
+
+    assert "COPY docker-entrypoint.sh" in dockerfile
+    assert "COPY solo-bot/docker-entrypoint.sh" not in dockerfile

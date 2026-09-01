@@ -22,6 +22,8 @@ COPY botfactory/pyproject.toml botfactory/README.md ./
 COPY botfactory/src ./src
 RUN pip install --no-cache-dir .
 
+# Понижает привилегии entrypoint: сначала он выравнивает права на
+# смонтированном /app/data, до которого правам из образа не достать.
 RUN useradd --create-home --uid 1000 bot \
     && mkdir -p /app/data/projects \
     && chown -R bot:bot /app
@@ -31,6 +33,12 @@ USER bot
 RUN git config --global user.name "botfactory" \
     && git config --global user.email "botfactory@localhost" \
     && git config --global --add safe.directory '*'
+
+COPY botfactory/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+USER root
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENV APP_USER=bot
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 VOLUME ["/app/data"]
 
