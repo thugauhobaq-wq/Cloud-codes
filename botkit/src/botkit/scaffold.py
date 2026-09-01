@@ -24,6 +24,7 @@ LAYOUT = {
     "gitignore.tmpl": ".gitignore",
     "Dockerfile.tmpl": "Dockerfile",
     "docker-compose.yml.tmpl": "docker-compose.yml",
+    "docker-entrypoint.sh.tmpl": "docker-entrypoint.sh",
     "ci.yml.tmpl": ".github/workflows/ci.yml",
     "src/init.py.tmpl": "src/{pkg}/__init__.py",
     "src/main.py.tmpl": "src/{pkg}/__main__.py",

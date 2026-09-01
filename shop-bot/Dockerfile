@@ -12,10 +12,16 @@ COPY src ./src
 RUN pip install --no-cache-dir .
 
 # Процесс не должен ходить под root — ему нужен только каталог с базой.
+# Понижает привилегии entrypoint: сначала он выравнивает права на
+# смонтированном /app/data, до которого правам из образа не достать.
 RUN useradd --create-home --uid 1000 shop \
     && mkdir -p /app/data \
     && chown -R shop:shop /app
-USER shop
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENV APP_USER=shop
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 VOLUME ["/app/data"]
 
