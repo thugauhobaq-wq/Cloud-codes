@@ -2,8 +2,8 @@
 
 Инструкция для того, кто ставит бота на сервер: [`booking-bot`](booking-bot/),
 [`shop-bot`](shop-bot/), [`leadmagnet-bot`](leadmagnet-bot/),
-[`freelance-parser`](freelance-parser/), [`botfactory`](botfactory/) и любой
-бот, созданный [`botkit`](botkit/). Все они устроены одинаково, поэтому шаги
+[`giveaway-bot`](giveaway-bot/), [`freelance-parser`](freelance-parser/),
+[`botfactory`](botfactory/) и любой бот, созданный [`botkit`](botkit/). Все они устроены одинаково, поэтому шаги
 общие — меняются только имя каталога и содержимое `.env`.
 
 ## Что нужно от сервера
@@ -58,8 +58,17 @@ docker compose run --rm shop python -m shop orders      # заказы
 ```
 
 `shop` здесь — имя сервиса из `docker-compose.yml`; у остальных это
-`booking`, `leadmagnet`, `fparser` и `botfactory`. Команды у каждого бота свои
-и перечислены в его README.
+`booking`, `leadmagnet`, `giveaway`, `fparser` и `botfactory`. Команды у
+каждого бота свои и перечислены в его README.
+
+`giveaway-bot` и `botfactory` собираются из корня репозитория, а не из своего
+каталога: в образ нужен ещё и `botkit`, лежащий рядом. `docker compose` это
+уже учитывает (`context: ..`), так что команды те же — но если собираете
+руками, запускайте `docker build` из корня:
+
+```bash
+docker build -f giveaway-bot/Dockerfile -t giveaway-bot .
+```
 
 ## Обновление
 
@@ -125,7 +134,7 @@ docker compose start
 
 ## Что проверено
 
-На чистом Docker собраны и запущены образы всех четырёх ботов и обоих
+На чистом Docker собраны и запущены образы всех пяти ботов и обоих
 вариантов проекта из `botkit` (в общем репозитории и автономного). Проверено:
 
 - сборка образа с нуля и запуск офлайн-команд в контейнере;
