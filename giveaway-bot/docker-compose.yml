@@ -1,0 +1,22 @@
+services:
+  giveaway:
+    build:
+      # Контекст на уровень выше: в образ нужен и botkit, лежащий рядом.
+      context: ..
+      dockerfile: giveaway-bot/Dockerfile
+    container_name: giveaway-bot
+    # Итоги подводятся по расписанию, а не по команде: если сервис лежит в
+    # момент дедлайна, розыгрыш просто не закончится.
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Участники и зёрна живут вне контейнера: обновление образа не должно
+      # стирать доказательства честности прошедших розыгрышей.
+      - ./data:/app/data
+    environment:
+      DB_PATH: /app/data/giveaway.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
