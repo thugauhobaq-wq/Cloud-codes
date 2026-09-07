@@ -10,11 +10,11 @@ import asyncio
 import contextlib
 import logging
 import signal
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 
 from .config import BotSettings
 from .storage import BaseStorage
@@ -37,12 +37,46 @@ def make_bot(settings: BotSettings, *, parse_mode: str = "HTML") -> Bot:
     return Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=parse_mode))
 
 
+async def publish_commands(
+    bot: Bot,
+    *,
+    commands: Sequence[BotCommand] = (),
+    admin_commands: Sequence[BotCommand] = (),
+    admins: Iterable[int] = (),
+) -> None:
+    """Разложить команды по областям видимости.
+
+    Без областей Telegram показывает один список всем, и клиент видит в меню
+    админские команды, которые ему всё равно недоступны, — а своих не видит.
+    Поэтому общий список получают все, а админский довешивается каждому
+    администратору в его личный чат.
+    """
+    if commands:
+        with contextlib.suppress(Exception):
+            # Меню команд — украшение; падать из-за него при старте не стоит.
+            await bot.set_my_commands(list(commands), scope=BotCommandScopeDefault())
+
+    for admin in admins:
+        if not admin_commands:
+            break
+        try:
+            await bot.set_my_commands(
+                list(admin_commands), scope=BotCommandScopeChat(chat_id=admin)
+            )
+        except Exception as exc:
+            # Обычная причина — админ ещё не открывал чат с ботом: для такого
+            # чата Telegram команды не принимает. Остальным это мешать не должно.
+            log.warning("не выставил команды администратору %s: %s", admin, exc)
+
+
 async def run_bot(
     *,
     bot: Bot,
     routers: Sequence[Router],
     workers: Sequence[PeriodicWorker] = (),
     commands: Sequence[BotCommand] = (),
+    admin_commands: Sequence[BotCommand] = (),
+    admins: Iterable[int] = (),
     storage: BaseStorage | None = None,
     on_startup: Callable[[], Awaitable[None]] | None = None,
     on_shutdown: Callable[[], Awaitable[None]] | None = None,
@@ -57,10 +91,9 @@ async def run_bot(
     for router in routers:
         dispatcher.include_router(router)
 
-    if commands:
-        with contextlib.suppress(Exception):
-            # Меню команд — украшение; падать из-за него при старте не стоит.
-            await bot.set_my_commands(list(commands))
+    await publish_commands(
+        bot, commands=commands, admin_commands=admin_commands, admins=admins
+    )
 
     if on_startup is not None:
         await on_startup()

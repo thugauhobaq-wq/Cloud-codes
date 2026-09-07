@@ -10,7 +10,7 @@ from .filters import IsAdmin, IsPrivate
 from .github import GitHub, GitHubError, Repo
 from .notify import Notifier
 from .publish import MODE_BRANCH, MODE_REPO, MODES, Published, PublishError, publish
-from .runner import make_bot, run_bot, setup_logging
+from .runner import make_bot, publish_commands, run_bot, setup_logging
 from .storage import BaseStorage, from_iso, now_iso, to_iso
 from .worker import PeriodicWorker
 
@@ -40,6 +40,7 @@ __all__ = [
     "make_bot",
     "now_iso",
     "publish",
+    "publish_commands",
     "run_bot",
     "setup_logging",
     "telegram_sender",

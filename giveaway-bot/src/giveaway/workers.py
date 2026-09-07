@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from botkit import PeriodicWorker
 
@@ -27,11 +28,13 @@ class Deadlines(PeriodicWorker):
         self._notify = notify
         self._settings = settings
 
-    async def tick(self) -> int:
+    async def tick(self, now: datetime | None = None) -> int:
+        """`now` задаётся только в тестах: иначе итоги нельзя проверить,
+        не дожидаясь реального срока."""
         finished = 0
-        for giveaway in await self._storage.due_giveaways():
+        for giveaway in await self._storage.due_giveaways(now):
             try:
-                winners = await self._storage.finish(giveaway.id)
+                winners = await self._storage.finish(giveaway.id, now)
             except NoParticipants:
                 # Разыгрывать не с кем. Закрываем, чтобы не проверять его
                 # каждую минуту, и говорим владельцу — это его новость.

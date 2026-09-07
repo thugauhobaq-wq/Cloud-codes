@@ -17,7 +17,7 @@ from botkit import make_bot, run_bot, setup_logging
 from .config import Settings, load_settings
 from .draw import ticket
 from .draw import verify as verify_draw
-from .handlers import admin_commands, build_router
+from .handlers import admin_commands, build_router, client_commands
 from .models import STATUS_TITLES
 from .notify import Notify
 from .storage import Storage
@@ -38,7 +38,9 @@ async def command_run(settings: Settings) -> None:
         bot=bot,
         routers=[build_router(storage, notify, settings)],
         workers=[Deadlines(storage, notify, settings)],
-        commands=admin_commands(),
+        commands=client_commands(),
+        admin_commands=admin_commands(),
+        admins=settings.admins(),
         storage=storage,
     )
 

@@ -6,7 +6,7 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BotCommand, CallbackQuery, Message
 
 from ..codes import looks_like_code, parse_start_payload
 from ..config import Settings
@@ -176,3 +176,12 @@ def build_client_router(
             )
 
     return router
+
+
+def client_commands() -> list[BotCommand]:
+    """Что видит подписчик в кнопке «Меню»."""
+    return [
+        BotCommand(command="start", description="Начать"),
+        BotCommand(command="my", description="Мои материалы"),
+        BotCommand(command="help", description="Как это работает"),
+    ]

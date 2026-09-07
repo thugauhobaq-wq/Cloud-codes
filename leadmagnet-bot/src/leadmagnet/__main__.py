@@ -16,10 +16,12 @@ import csv
 import logging
 import signal
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.types import BotCommandScopeChat, BotCommandScopeDefault
 
 from .broadcast import Broadcaster, telegram_sender
 from .config import Settings, load_settings
@@ -27,6 +29,7 @@ from .delivery import Deliverer
 from .followups import FollowUps
 from .handlers import build_router
 from .handlers.admin import admin_commands
+from .handlers.client import client_commands
 from .seed import seed
 from .storage import Storage
 
@@ -40,6 +43,26 @@ def setup_logging(level: str) -> None:
         datefmt="%H:%M:%S",
     )
     logging.getLogger("aiogram.event").setLevel(logging.WARNING)
+
+
+
+async def publish_commands(bot: Bot, admins: Iterable[int]) -> None:
+    """Разложить команды по областям видимости.
+
+    Без областей Telegram показывает один список всем: клиент видит в меню
+    админские команды, которые ему недоступны, а своих не видит вовсе.
+    """
+    with contextlib.suppress(Exception):
+        # Меню команд — украшение; падать из-за него при старте не стоит.
+        await bot.set_my_commands(client_commands(), scope=BotCommandScopeDefault())
+
+    for admin in admins:
+        try:
+            await bot.set_my_commands(admin_commands(), scope=BotCommandScopeChat(chat_id=admin))
+        except Exception as exc:
+            # Обычная причина — админ ещё не открывал чат с ботом: для такого
+            # чата Telegram команды не принимает. Остальным это не мешает.
+            log.warning("не выставил команды администратору %s: %s", admin, exc)
 
 
 async def command_run(settings: Settings) -> None:
@@ -63,9 +86,7 @@ async def command_run(settings: Settings) -> None:
         build_router(storage, deliverer, broadcaster, settings, notify_owner)
     )
 
-    with contextlib.suppress(Exception):
-        # Меню команд — украшение; падать из-за него при старте не стоит.
-        await bot.set_my_commands(admin_commands())
+    await publish_commands(bot, settings.admins())
 
     if not await storage.list_magnets():
         log.warning("магнитов нет — заведите их командой /magnet_add или python -m leadmagnet seed")
