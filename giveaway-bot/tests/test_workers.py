@@ -27,7 +27,7 @@ async def test_expired_giveaway_is_finished(storage: Storage, notify: Notify, se
     giveaway = await storage.create_giveaway("Кофе", ends_at=NOW - timedelta(minutes=1))
     await fill(storage, giveaway.id, 5)
 
-    assert await worker(storage, notify, settings).tick() == 1
+    assert await worker(storage, notify, settings).tick(NOW) == 1
 
     fresh = await storage.get_giveaway(giveaway.id)
     assert fresh is not None and fresh.status == STATUS_FINISHED
@@ -40,7 +40,7 @@ async def test_a_running_giveaway_is_left_alone(
     giveaway = await storage.create_giveaway("Кофе", ends_at=NOW + timedelta(days=1))
     await fill(storage, giveaway.id, 5)
 
-    assert await worker(storage, notify, settings).tick() == 0
+    assert await worker(storage, notify, settings).tick(NOW) == 0
 
     fresh = await storage.get_giveaway(giveaway.id)
     assert fresh is not None and fresh.is_active
@@ -52,7 +52,7 @@ async def test_a_giveaway_without_a_deadline_waits_for_the_organiser(
     giveaway = await storage.create_giveaway("Кофе")
     await fill(storage, giveaway.id, 5)
 
-    assert await worker(storage, notify, settings).tick() == 0
+    assert await worker(storage, notify, settings).tick(NOW) == 0
     fresh = await storage.get_giveaway(giveaway.id)
     assert fresh is not None and fresh.is_active
 
@@ -65,7 +65,7 @@ async def test_winners_are_told_personally(
     )
     await fill(storage, giveaway.id, 8)
 
-    await worker(storage, notify, settings).tick()
+    await worker(storage, notify, settings).tick(NOW)
 
     winners = await storage.winners(giveaway.id)
     for winner in winners:
@@ -81,7 +81,7 @@ async def test_the_announcement_goes_to_the_channel(
     giveaway = await storage.create_giveaway("Кофе", ends_at=NOW - timedelta(minutes=1))
     await fill(storage, giveaway.id, 5)
 
-    await worker(storage, notify, settings).tick()
+    await worker(storage, notify, settings).tick(NOW)
 
     published = bot.to("@results")
     assert published and "Итоги розыгрыша" in published[0]
@@ -97,7 +97,7 @@ async def test_without_a_channel_the_announcement_goes_to_the_owner(
     giveaway = await storage.create_giveaway("Кофе", ends_at=NOW - timedelta(minutes=1))
     await fill(storage, giveaway.id, 5)
 
-    await worker(storage, notify, settings).tick()
+    await worker(storage, notify, settings).tick(NOW)
 
     assert any("Итоги розыгрыша" in text for text in bot.to(settings.owner_id))
 
@@ -108,12 +108,12 @@ async def test_a_giveaway_nobody_joined_is_closed_and_reported(
     """Иначе воркер будет пытаться разыграть его каждую минуту, вечно."""
     giveaway = await storage.create_giveaway("Пустой", ends_at=NOW - timedelta(minutes=1))
 
-    assert await worker(storage, notify, settings).tick() == 0
+    assert await worker(storage, notify, settings).tick(NOW) == 0
 
     fresh = await storage.get_giveaway(giveaway.id)
     assert fresh is not None and fresh.status == STATUS_CANCELLED
     assert any("без участников" in text for text in bot.to(settings.owner_id))
-    assert await worker(storage, notify, settings).tick() == 0
+    assert await worker(storage, notify, settings).tick(NOW) == 0
 
 
 async def test_blocked_winners_are_reported_to_the_owner(
@@ -128,7 +128,7 @@ async def test_blocked_winners_are_reported_to_the_owner(
     bot.unreachable = set(range(100, 105))
     notify = Notify(bot, settings.admins(), settings)
 
-    await worker(storage, notify, settings).tick()
+    await worker(storage, notify, settings).tick(NOW)
 
     assert any("не удалось написать" in text for text in bot.to(settings.owner_id))
     winners = await storage.winners(giveaway.id)
@@ -142,7 +142,7 @@ async def test_several_giveaways_are_finished_in_one_tick(
         giveaway = await storage.create_giveaway(title, ends_at=NOW - timedelta(minutes=1))
         await fill(storage, giveaway.id, 4, start=1000 * giveaway.id)
 
-    assert await worker(storage, notify, settings).tick() == 3
+    assert await worker(storage, notify, settings).tick(NOW) == 3
 
 
 async def test_a_tick_after_everything_is_finished_does_nothing(
@@ -151,8 +151,8 @@ async def test_a_tick_after_everything_is_finished_does_nothing(
     """Перезапуск контейнера не должен рассылать итоги повторно."""
     giveaway = await storage.create_giveaway("Кофе", ends_at=NOW - timedelta(minutes=1))
     await fill(storage, giveaway.id, 5)
-    await worker(storage, notify, settings).tick()
+    await worker(storage, notify, settings).tick(NOW)
     sent = len(bot.messages)
 
-    assert await worker(storage, notify, settings).tick() == 0
+    assert await worker(storage, notify, settings).tick(NOW) == 0
     assert len(bot.messages) == sent

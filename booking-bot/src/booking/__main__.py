@@ -14,14 +14,17 @@ import contextlib
 import logging
 import signal
 import sys
+from collections.abc import Iterable
 from datetime import timedelta
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.types import BotCommandScopeChat, BotCommandScopeDefault
 
 from .config import Settings, load_settings
 from .handlers import build_router
 from .handlers.admin import admin_commands
+from .handlers.client import client_commands
 from .notify import Notifier
 from .reminders import Reminders
 from .schedule import parse_date
@@ -47,6 +50,26 @@ def setup_logging(level: str) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+
+async def publish_commands(bot: Bot, admins: Iterable[int]) -> None:
+    """Разложить команды по областям видимости.
+
+    Без областей Telegram показывает один список всем: клиент видит в меню
+    админские команды, которые ему недоступны, а своих не видит вовсе.
+    """
+    with contextlib.suppress(Exception):
+        # Меню команд — украшение; падать из-за него при старте не стоит.
+        await bot.set_my_commands(client_commands(), scope=BotCommandScopeDefault())
+
+    for admin in admins:
+        try:
+            await bot.set_my_commands(admin_commands(), scope=BotCommandScopeChat(chat_id=admin))
+        except Exception as exc:
+            # Обычная причина — админ ещё не открывал чат с ботом: для такого
+            # чата Telegram команды не принимает. Остальным это не мешает.
+            log.warning("не выставил команды администратору %s: %s", admin, exc)
+
+
 async def command_run(settings: Settings) -> None:
     settings.require_telegram()
 
@@ -61,9 +84,7 @@ async def command_run(settings: Settings) -> None:
     dispatcher = Dispatcher()
     dispatcher.include_router(build_router(storage, booking, notifier, settings))
 
-    with contextlib.suppress(Exception):
-        # Меню команд — украшение; падать из-за него при старте не стоит.
-        await bot.set_my_commands(admin_commands())
+    await publish_commands(bot, settings.admins())
 
     if not await storage.list_windows():
         log.warning("расписание не задано — записаться нельзя, задайте /hours пн-пт 10:00-20:00")

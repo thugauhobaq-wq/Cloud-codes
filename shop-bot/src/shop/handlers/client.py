@@ -10,6 +10,7 @@ from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
+    BotCommand,
     CallbackQuery,
     KeyboardButton,
     Message,
@@ -720,3 +721,14 @@ def _normalize_phone(raw: str) -> str:
     if len(digits) == 10:
         return f"+7 {digits[0:3]} {digits[3:6]}-{digits[6:8]}-{digits[8:]}"
     return raw.strip()
+
+
+def client_commands() -> list[BotCommand]:
+    """Что видит покупатель в кнопке «Меню»."""
+    return [
+        BotCommand(command="start", description="Главное меню"),
+        BotCommand(command="catalog", description="Каталог"),
+        BotCommand(command="cart", description="Корзина"),
+        BotCommand(command="orders", description="Мои заказы"),
+        BotCommand(command="search", description="Поиск товара"),
+    ]

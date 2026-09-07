@@ -8,7 +8,7 @@ from ..config import Settings
 from ..notify import Notify
 from ..storage import Storage
 from .admin import admin_commands, build_admin_router
-from .client import build_client_router
+from .client import build_client_router, client_commands
 
 
 def build_router(storage: Storage, notify: Notify, settings: Settings) -> Router:
@@ -20,4 +20,10 @@ def build_router(storage: Storage, notify: Notify, settings: Settings) -> Router
     return root
 
 
-__all__ = ["admin_commands", "build_admin_router", "build_client_router", "build_router"]
+__all__ = [
+    "admin_commands",
+    "build_admin_router",
+    "build_client_router",
+    "build_router",
+    "client_commands",
+]

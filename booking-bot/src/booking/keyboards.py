@@ -31,6 +31,7 @@ CB_CANCEL = "cancel"
 CB_CANCEL_YES = "cyes"
 CB_MOVE = "move"
 CB_BACK = "back"
+CB_HOME = "home"
 CB_NOOP = "noop"
 CB_ADMIN_CANCEL = "acancel"
 
@@ -63,6 +64,17 @@ def request_phone() -> ReplyKeyboardMarkup:
     )
 
 
+
+def home_button() -> InlineKeyboardButton:
+    """Выход из записи одним нажатием.
+
+    Кнопки «назад» ведут на шаг вверх, а бросить запись целиком было нечем:
+    с первого шага выхода не было вовсе, а с последнего пришлось бы нажимать
+    «назад» трижды.
+    """
+    return InlineKeyboardButton(text="🏠 В начало", callback_data=f"{CB_HOME}:")
+
+
 def services_keyboard(services: Sequence[Service]) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -74,6 +86,7 @@ def services_keyboard(services: Sequence[Service]) -> InlineKeyboardMarkup:
         ]
         for item in services
     ]
+    rows.append([home_button()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -85,7 +98,12 @@ def masters_keyboard(masters: Sequence[Master]) -> InlineKeyboardMarkup:
     # «Не важно» — не вежливость, а способ показать объединённую сетку слотов:
     # у клиента, которому всё равно, выбор шире.
     rows.append([InlineKeyboardButton(text="Не важно", callback_data=f"{CB_MASTER}:0")])
-    rows.append([InlineKeyboardButton(text="⬅️ К услугам", callback_data=f"{CB_BACK}:service")])
+    rows.append(
+        [
+            InlineKeyboardButton(text="⬅️ К услугам", callback_data=f"{CB_BACK}:service"),
+            home_button(),
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -104,8 +122,10 @@ def days_keyboard(
         )
 
     rows = [buttons[i : i + DAYS_PER_ROW] for i in range(0, len(buttons), DAYS_PER_ROW)]
+    tail = [home_button()]
     if with_back:
-        rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"{CB_BACK}:master")])
+        tail.insert(0, InlineKeyboardButton(text="⬅️ Назад", callback_data=f"{CB_BACK}:master"))
+    rows.append(tail)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -118,7 +138,12 @@ def slots_keyboard(slots: Sequence[datetime], tz: ZoneInfo) -> InlineKeyboardMar
         for slot in slots
     ]
     rows = [buttons[i : i + SLOTS_PER_ROW] for i in range(0, len(buttons), SLOTS_PER_ROW)]
-    rows.append([InlineKeyboardButton(text="⬅️ К дате", callback_data=f"{CB_BACK}:day")])
+    rows.append(
+        [
+            InlineKeyboardButton(text="⬅️ К дате", callback_data=f"{CB_BACK}:day"),
+            home_button(),
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -126,7 +151,10 @@ def confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="✅ Записаться", callback_data=f"{CB_CONFIRM}:")],
-            [InlineKeyboardButton(text="⬅️ Другое время", callback_data=f"{CB_BACK}:day")],
+            [
+                InlineKeyboardButton(text="⬅️ Другое время", callback_data=f"{CB_BACK}:day"),
+                home_button(),
+            ],
         ]
     )
 

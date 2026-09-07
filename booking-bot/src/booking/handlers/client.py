@@ -7,15 +7,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 from datetime import UTC, date, datetime
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Contact, Message, ReplyKeyboardRemove
+from aiogram.types import BotCommand, CallbackQuery, Contact, Message, ReplyKeyboardRemove
 
 from ..config import Settings
 from ..keyboards import (
@@ -28,6 +30,7 @@ from ..keyboards import (
     CB_CANCEL_YES,
     CB_CONFIRM,
     CB_DAY,
+    CB_HOME,
     CB_MASTER,
     CB_MOVE,
     CB_NOOP,
@@ -421,6 +424,23 @@ def build_client_router(
                 return
         await _show_calendar(callback, state)
 
+    @router.callback_query(F.data.startswith(f"{CB_HOME}:"))
+    async def go_home(callback: CallbackQuery, state: FSMContext) -> None:
+        """Бросить запись и вернуться в главное меню.
+
+        Состояние обязательно очищаем: иначе следующее сообщение клиента
+        уйдёт в брошенный шаг записи, а не в меню.
+        """
+        await state.clear()
+        await callback.answer()
+        with contextlib.suppress(TelegramAPIError):
+            await callback.message.delete()
+        await callback.bot.send_message(
+            callback.from_user.id,
+            f"Главное меню «{escape(settings.business_name)}».",
+            reply_markup=main_menu(),
+        )
+
     @router.callback_query(F.data.startswith(f"{CB_NOOP}:"))
     async def noop(callback: CallbackQuery) -> None:
         await callback.answer("В этот день свободного времени нет")
@@ -534,3 +554,17 @@ def _normalize_phone(raw: str) -> str:
     if len(digits) == 10:
         return f"+7 {digits[0:3]} {digits[3:6]}-{digits[6:8]}-{digits[8:]}"
     return raw.strip()
+
+
+def client_commands() -> list[BotCommand]:
+    """Что видит клиент в кнопке «Меню».
+
+    Только то, что ему доступно: админские команды в общем списке сбивают с
+    толку и всё равно не работают.
+    """
+    return [
+        BotCommand(command="start", description="Главное меню"),
+        BotCommand(command="book", description="Записаться"),
+        BotCommand(command="my", description="Мои записи"),
+        BotCommand(command="help", description="Как это работает"),
+    ]

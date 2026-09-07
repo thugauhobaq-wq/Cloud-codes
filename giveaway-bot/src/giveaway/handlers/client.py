@@ -6,7 +6,7 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BotCommand, CallbackQuery, Message
 from botkit.messaging import edit, payload, send_to_user
 
 from ..config import Settings
@@ -167,3 +167,12 @@ async def _try_join(
     if not await edit(callback, join_confirmation(fresh, participant), None):
         # Сообщение могло устареть или прийти из канала — пишем в личку.
         await send_to_user(callback, join_confirmation(fresh, participant))
+
+
+def client_commands() -> list[BotCommand]:
+    """Что видит участник в кнопке «Меню»."""
+    return [
+        BotCommand(command="start", description="Начать"),
+        BotCommand(command="go", description="Идущие розыгрыши"),
+        BotCommand(command="my", description="Мои розыгрыши"),
+    ]
