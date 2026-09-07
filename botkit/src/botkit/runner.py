@@ -37,6 +37,26 @@ def make_bot(settings: BotSettings, *, parse_mode: str = "HTML") -> Bot:
     return Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=parse_mode))
 
 
+async def _publish_commands(bot: Bot, commands, scope, label: str, *, attempts: int = 5) -> None:
+    """Выставить один набор команд, повторяя при обрыве связи.
+
+    Связь сервера с Telegram моргает: одиночный set_my_commands легко ловит
+    таймаут, и тогда меню молча остаётся старым — а после перезапуска бота
+    разделение команд слетает. Поэтому повторяем несколько раз.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            await bot.set_my_commands(list(commands), scope=scope)
+            return
+        except Exception as exc:
+            if attempt == attempts:
+                # Частая причина для чата админа — он ещё не открывал бота:
+                # такой чат Telegram не примет, и повторять смысла нет.
+                log.warning("не выставил команды (%s): %s", label, exc)
+                return
+            await asyncio.sleep(2)
+
+
 async def publish_commands(
     bot: Bot,
     *,
@@ -52,21 +72,14 @@ async def publish_commands(
     администратору в его личный чат.
     """
     if commands:
-        with contextlib.suppress(Exception):
-            # Меню команд — украшение; падать из-за него при старте не стоит.
-            await bot.set_my_commands(list(commands), scope=BotCommandScopeDefault())
+        await _publish_commands(bot, commands, BotCommandScopeDefault(), "клиентские")
 
     for admin in admins:
         if not admin_commands:
             break
-        try:
-            await bot.set_my_commands(
-                list(admin_commands), scope=BotCommandScopeChat(chat_id=admin)
-            )
-        except Exception as exc:
-            # Обычная причина — админ ещё не открывал чат с ботом: для такого
-            # чата Telegram команды не принимает. Остальным это мешать не должно.
-            log.warning("не выставил команды администратору %s: %s", admin, exc)
+        await _publish_commands(
+            bot, admin_commands, BotCommandScopeChat(chat_id=admin), f"админ {admin}"
+        )
 
 
 async def run_bot(
