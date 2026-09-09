@@ -1,0 +1,10 @@
+[Unit]
+Description=Обновление проектов Cloud-codes из main
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cloud-codes-update
+# Сборка образа на слабом VPS может занять несколько минут.
+TimeoutStartSec=20min

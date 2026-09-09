@@ -1,0 +1,37 @@
+# Обратный прокси с автоматическим HTTPS и паролем. Домен и почта приезжают
+# из окружения (см. docker-compose.https.yml), логин с паролем — из файла
+# caddy/auth.caddy, который делает deploy/hwocr-auth.sh.
+
+{
+	email {$HWOCR_EMAIL}
+}
+
+{$HWOCR_DOMAIN} {
+	encode zstd gzip
+
+	import /etc/caddy/extra/auth.caddy
+
+	reverse_proxy hwocr:8080 {
+		# Состояние задачи идёт потоком Server-Sent Events: буферизация ответа
+		# его ломает — карточка обновлялась бы только в самом конце.
+		flush_interval -1
+
+		transport http {
+			response_header_timeout 3m
+			read_timeout 10m
+		}
+	}
+
+	# Телефон сжимает фото до полумегабайта, оригинал через «Поделиться» —
+	# до десятка. Предел сервера — 15 МБ, здесь чуть больше, чтобы отказ
+	# приходил от него с понятным текстом, а не от прокси.
+	request_body {
+		max_size 16MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+}
