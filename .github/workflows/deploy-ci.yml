@@ -1,0 +1,62 @@
+name: deploy CI
+
+on:
+  push:
+    paths:
+      - 'deploy/**'
+      - 'handwriting-ocr/docker-compose*.yml'
+      - 'handwriting-ocr/Caddyfile'
+      - '.github/workflows/deploy-ci.yml'
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'handwriting-ocr/docker-compose*.yml'
+      - 'handwriting-ocr/Caddyfile'
+      - '.github/workflows/deploy-ci.yml'
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Синтаксис и shellcheck
+        run: |
+          bash -n deploy/*.sh deploy/tests/run.sh
+          sudo apt-get install -y -qq shellcheck >/dev/null
+          shellcheck -S warning deploy/*.sh deploy/tests/run.sh
+
+      - name: Сценарии автообновления на заглушках
+        # Локальный «origin», подменённые docker и curl: без сервера и сети.
+        run: bash deploy/tests/run.sh
+
+  https:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: handwriting-ocr
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Пароль через hwocr-auth.sh
+        run: bash ../deploy/hwocr-auth.sh tester secret-password-1 && grep -q '^basic_auth' caddy/auth.caddy
+
+      - name: Compose-файлы складываются
+        run: |
+          cp .env.example .env
+          HWOCR_DOMAIN=ocr.example.com docker compose -f docker-compose.yml -f docker-compose.https.yml config > merged.yml
+          grep -q 'caddy:2-alpine' merged.yml
+          # у hwocr порт наружу должен исчезнуть, снаружи только Caddy
+          python3 - <<'PY'
+          import re, sys
+          text = open("merged.yml").read()
+          hwocr = text.split("  hwocr:")[1].split("\n  caddy:")[0] if "  hwocr:" in text else ""
+          assert "8080:8080" not in hwocr and "published" not in hwocr, "hwocr всё ещё торчит наружу"
+          print("порт 8080 закрыт, наружу смотрит только Caddy")
+          PY
+
+      - name: Caddyfile проходит проверку
+        run: |
+          docker run --rm -e HWOCR_DOMAIN=ocr.example.com -e HWOCR_EMAIL= \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/caddy:/etc/caddy/extra:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

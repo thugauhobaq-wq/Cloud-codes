@@ -1,0 +1,10 @@
+[Unit]
+Description=Раз в минуту проверять main и обновлять проекты
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

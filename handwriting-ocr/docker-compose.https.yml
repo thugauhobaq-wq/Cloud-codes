@@ -1,0 +1,38 @@
+# Тот же сервис, но с доменом, настоящим HTTPS и паролем на входе.
+#
+# Без HTTPS телефон не даст ни поставить приложение на домашний экран, ни
+# нажать «Копировать», ни принять фото через «Поделиться»: браузеры разрешают
+# это только защищённым сайтам. Пароль нужен, потому что каждое фото стоит
+# денег: адрес, найденный случайно, не должен тратить ваш ключ.
+#
+#   HWOCR_DOMAIN=ocr.example.com \      # или 1.2.3.4.sslip.io без своего домена
+#   HWOCR_EMAIL=you@example.com \
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+#
+# Логин и пароль: bash ../deploy/hwocr-auth.sh имя пароль → caddy/auth.caddy
+# Порт 8080 наружу больше не смотрит: снаружи доступен только Caddy.
+
+services:
+  hwocr:
+    ports: !override []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - hwocr
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      HWOCR_DOMAIN: ${HWOCR_DOMAIN:?укажите домен, например ocr.example.com или 1.2.3.4.sslip.io}
+      HWOCR_EMAIL: ${HWOCR_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/etc/caddy/extra:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
