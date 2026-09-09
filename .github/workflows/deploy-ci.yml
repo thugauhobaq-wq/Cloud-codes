@@ -44,7 +44,7 @@ jobs:
       - name: Compose-файлы складываются
         run: |
           cp .env.example .env
-          HWOCR_DOMAIN=ocr.example.com docker compose -f docker-compose.yml -f docker-compose.https.yml config --format json > merged.json
+          HWOCR_DOMAIN=ocr.example.com HWOCR_EMAIL=ci@example.com docker compose -f docker-compose.yml -f docker-compose.https.yml config --format json > merged.json
           # у hwocr порт наружу должен исчезнуть, снаружи только Caddy
           python3 - <<'PY'
           import json
@@ -58,6 +58,6 @@ jobs:
 
       - name: Caddyfile проходит проверку
         run: |
-          docker run --rm -e HWOCR_DOMAIN=ocr.example.com -e HWOCR_EMAIL= \
+          docker run --rm -e HWOCR_DOMAIN=ocr.example.com -e HWOCR_EMAIL=ci@example.com \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/caddy:/etc/caddy/extra:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

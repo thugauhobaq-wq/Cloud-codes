@@ -57,7 +57,7 @@ python -m hwocr serve
 бесплатный по IP вида `1.2.3.4.sslip.io` (Let's Encrypt такие выдаёт).
 
 ```bash
-nano .env                                 # + HWOCR_DOMAIN=… и HWOCR_EMAIL=…
+nano .env                                 # + HWOCR_DOMAIN=… и HWOCR_EMAIL=… (оба обязательны)
 bash ../deploy/hwocr-auth.sh имя пароль   # логин для входа с телефона
 docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
 ```

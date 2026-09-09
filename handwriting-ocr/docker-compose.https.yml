@@ -26,7 +26,9 @@ services:
       - "443:443"
     environment:
       HWOCR_DOMAIN: ${HWOCR_DOMAIN:?укажите домен, например ocr.example.com или 1.2.3.4.sslip.io}
-      HWOCR_EMAIL: ${HWOCR_EMAIL:-}
+      # Почта обязательна: пустое значение ломает разбор Caddyfile, а
+      # Let's Encrypt по ней предупреждает о проблемах с сертификатом.
+      HWOCR_EMAIL: ${HWOCR_EMAIL:?укажите почту для Let's Encrypt, например you@example.com}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy:/etc/caddy/extra:ro
