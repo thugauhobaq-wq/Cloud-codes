@@ -44,15 +44,16 @@ jobs:
       - name: Compose-файлы складываются
         run: |
           cp .env.example .env
-          HWOCR_DOMAIN=ocr.example.com docker compose -f docker-compose.yml -f docker-compose.https.yml config > merged.yml
-          grep -q 'caddy:2-alpine' merged.yml
+          HWOCR_DOMAIN=ocr.example.com docker compose -f docker-compose.yml -f docker-compose.https.yml config --format json > merged.json
           # у hwocr порт наружу должен исчезнуть, снаружи только Caddy
           python3 - <<'PY'
-          import re, sys
-          text = open("merged.yml").read()
-          hwocr = text.split("  hwocr:")[1].split("\n  caddy:")[0] if "  hwocr:" in text else ""
-          assert "8080:8080" not in hwocr and "published" not in hwocr, "hwocr всё ещё торчит наружу"
-          print("порт 8080 закрыт, наружу смотрит только Caddy")
+          import json
+          services = json.load(open("merged.json"))["services"]
+          assert services["caddy"]["image"].startswith("caddy:"), "нет Caddy"
+          assert not services["hwocr"].get("ports"), "hwocr всё ещё торчит наружу"
+          published = {str(p["published"]) for p in services["caddy"]["ports"]}
+          assert published == {"80", "443"}, published
+          print("порт 8080 закрыт, наружу смотрят только 80 и 443 у Caddy")
           PY
 
       - name: Caddyfile проходит проверку

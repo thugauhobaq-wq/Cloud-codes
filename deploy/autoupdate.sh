@@ -15,6 +15,7 @@
 set -euo pipefail
 
 CONFIG="${CLOUD_CODES_CONFIG:-/etc/cloud-codes/env}"
+# shellcheck disable=SC1090  # путь к настройкам задаётся снаружи
 [ -f "$CONFIG" ] && . "$CONFIG"
 
 REPO_DIR="${REPO_DIR:-/opt/cloud-codes}"
@@ -79,7 +80,7 @@ print("failure" if bad else "success")
 
 deploy_project() {
     # Пересобрать один проект; возвращает код compose, вывод — в журнал.
-    local name="$1" files="$2" dir="$REPO_DIR/$1" args=() f out
+    local name="$1" files="$2" dir="$REPO_DIR/$1" args=() f
     [ -d "$dir" ] || { log "$name: каталога нет"; return 1; }
     IFS=, read -r -a list <<<"$files"
     for f in "${list[@]}"; do args+=(-f "$f"); done
