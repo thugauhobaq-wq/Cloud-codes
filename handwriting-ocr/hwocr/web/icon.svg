@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Рукопись → текст">
+  <rect width="512" height="512" rx="112" fill="#111820"/>
+  <rect x="112" y="96" width="288" height="320" rx="24" fill="#1d2a38" stroke="#4a9eff" stroke-width="16"/>
+  <path d="M150 170c22-26 40-18 52 0s28 22 46-4 34-16 44 4 30 20 46 0" fill="none" stroke="#e8edf3" stroke-width="14" stroke-linecap="round"/>
+  <path d="M150 232c30-30 44-10 58 4s30 12 46-8 36-14 48 6 30 14 44-2" fill="none" stroke="#e8edf3" stroke-width="14" stroke-linecap="round"/>
+  <path d="M160 290h192M160 334h192M160 378h120" stroke="#4a9eff" stroke-width="16" stroke-linecap="round"/>
+</svg>
