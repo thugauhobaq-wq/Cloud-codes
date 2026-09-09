@@ -1,0 +1,83 @@
+name: handwriting-ocr CI
+
+on:
+  push:
+    paths:
+      - 'handwriting-ocr/**'
+      - '.github/workflows/handwriting-ocr-ci.yml'
+  pull_request:
+    paths:
+      - 'handwriting-ocr/**'
+      - '.github/workflows/handwriting-ocr-ci.yml'
+
+defaults:
+  run:
+    working-directory: handwriting-ocr
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установить без клиента Anthropic
+        # Сначала без него: движок Яндекса и все тесты обязаны работать и так.
+        run: pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check .
+
+      - name: Тесты без SDK
+        # Сеть в тестах не нужна: движки подменены заглушками.
+        run: pytest -q
+
+      - name: Установить клиент Anthropic и повторить тесты
+        run: |
+          pip install -e ".[claude]"
+          python -c "import anthropic, hwocr.recognize.claude"
+          pytest -q
+
+      - name: Сервер без ключа не поднимается
+        run: |
+          set +e
+          OCR_ENGINE=claude ANTHROPIC_API_KEY= python -m hwocr serve --port 8098 --data /tmp/hwocr-nokey 2>err.txt
+          code=$?
+          set -e
+          test "$code" -eq 1
+          grep -q ANTHROPIC_API_KEY err.txt && echo "сообщает, чего не хватает"
+
+      - name: Проверить приложение и API
+        run: |
+          OCR_ENGINE=claude ANTHROPIC_API_KEY=dummy python -m hwocr serve --port 8099 --data /tmp/hwocr-data &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8099/api/config >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8099/api/config | grep -q '"engine": "claude"' && echo "движок выбран"
+          curl -sf http://127.0.0.1:8099/ | grep -q '<title>' && echo "страница отдаётся"
+          curl -sf http://127.0.0.1:8099/manifest.webmanifest | grep -q share_target
+          curl -sf http://127.0.0.1:8099/sw.js >/dev/null && echo "service worker на месте"
+          curl -sf http://127.0.0.1:8099/api/jobs | grep -q '\[\]' && echo "очередь пуста"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST --data-binary 'не картинка' \
+                 -H 'Content-Type: image/jpeg' 'http://127.0.0.1:8099/api/jobs?name=a.jpg')
+          test "$code" = "415" && echo "мусор отвергается"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать образ
+        run: docker build -t hwocr .
+      - name: Запустить и постучаться
+        run: |
+          docker run -d --name hwocr -p 8080:8080 -e OCR_ENGINE=claude -e ANTHROPIC_API_KEY=dummy hwocr
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/config >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/api/config | grep -q claude
+          docker rm -f hwocr

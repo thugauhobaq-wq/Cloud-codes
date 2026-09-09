@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Рукопись">
+<title>Рукопись → текст</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Рукопись → текст</h1>
+  <button id="install" class="ghost" hidden>Установить</button>
+</header>
+
+<main>
+  <section class="card" id="picker">
+    <div class="shoot">
+      <label class="button primary">
+        <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>
+        </svg>
+        Сфотографировать
+      </label>
+      <label class="button">
+        <input type="file" id="gallery" accept="image/*" multiple hidden>
+        Из галереи
+      </label>
+    </div>
+    <p class="hint">Лист целиком, при ровном свете, без тени от руки.
+      <span class="engine" id="engine"></span></p>
+  </section>
+
+  <section id="uploads" class="uploads" hidden></section>
+
+  <section class="list">
+    <h2 id="list-title" hidden>Распознано</h2>
+    <div id="jobs"></div>
+    <p id="empty" class="empty">Пока пусто. Сфотографируйте лист — текст появится здесь,
+      его можно поправить, скопировать или отправить.</p>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<template id="job-template">
+  <article class="job">
+    <div class="job-head">
+      <img class="job-thumb" alt="" hidden>
+      <div class="job-title">
+        <span class="job-name"></span>
+        <span class="job-meta"></span>
+      </div>
+      <button class="ghost job-remove" title="Удалить" aria-label="Удалить">✕</button>
+    </div>
+    <div class="bar"><i></i></div>
+    <textarea class="job-text" rows="4" readonly hidden spellcheck="false"></textarea>
+    <div class="job-foot">
+      <span class="job-status"></span>
+      <span class="job-saved" hidden></span>
+      <span class="job-actions">
+        <button class="button job-copy" hidden>Копировать</button>
+        <button class="button primary job-share" hidden>Поделиться</button>
+        <button class="button job-cancel" hidden>Отменить</button>
+      </span>
+    </div>
+  </article>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>
