@@ -60,7 +60,7 @@ fi
 step "Что дальше"
 IP="$(curl -fsS -m 5 https://api.ipify.org 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
 cat <<TXT
-  1. Ключи движка и домен:
+  1. Ключи Яндекса (YC_API_KEY, YC_FOLDER_ID — как получить, в README проекта) и домен:
        cp $REPO_DIR/handwriting-ocr/.env.example $REPO_DIR/handwriting-ocr/.env
        nano $REPO_DIR/handwriting-ocr/.env
      и дописать в него две строки (домен свой или бесплатный по IP):
