@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from .base import MEDIA_TYPES, RecognitionError, Recognizer, sniff_image
 
 ENGINES = ("claude", "yandex")
-DEFAULT_ENGINE = "claude"
+DEFAULT_ENGINE = "yandex"
 
 
 class ConfigError(RecognitionError):
@@ -50,9 +50,14 @@ def build_recognizer(env: Mapping[str, str] | None = None) -> Recognizer:
                 f"OCR_ENGINE=yandex, но не задан {' и '.join(missing)} — "
                 "впишите в .env (см. .env.example)"
             )
-        from .yandex import YandexRecognizer
+        from .yandex import DEFAULT_LANGUAGES, YandexRecognizer
 
-        return YandexRecognizer(key, folder)
+        languages = tuple(
+            code.strip().lower()
+            for code in (env.get("YC_LANGUAGES") or ",".join(DEFAULT_LANGUAGES)).split(",")
+            if code.strip()
+        )
+        return YandexRecognizer(key, folder, languages=languages or DEFAULT_LANGUAGES)
 
     raise ConfigError(
         f"неизвестный движок OCR_ENGINE={engine!r}; допустимо: {', '.join(ENGINES)}"

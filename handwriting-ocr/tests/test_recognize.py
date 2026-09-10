@@ -47,15 +47,32 @@ def fake_sdk(monkeypatch):
     return created
 
 
-def test_default_engine_is_claude(fake_sdk):
-    engine = build_recognizer({"ANTHROPIC_API_KEY": "sk-test"})
+def test_default_engine_is_yandex():
+    engine = build_recognizer({"YC_API_KEY": "k", "YC_FOLDER_ID": "f"})
+    assert engine.name == "yandex" and engine.languages == ["ru"]
+
+
+def test_yandex_languages_come_from_env():
+    engine = build_recognizer(
+        {"OCR_ENGINE": "yandex", "YC_API_KEY": "k", "YC_FOLDER_ID": "f", "YC_LANGUAGES": "ru, EN"}
+    )
+    assert engine.languages == ["ru", "en"]
+
+
+def test_claude_engine_is_chosen_explicitly(fake_sdk):
+    engine = build_recognizer({"OCR_ENGINE": "claude", "ANTHROPIC_API_KEY": "sk-test"})
     assert fake_sdk[0]["api_key"] == "sk-test"
     assert engine.name == "claude" and engine.model == DEFAULT_MODEL
 
 
 def test_claude_model_and_fallbacks_come_from_env(fake_sdk):
     engine = build_recognizer(
-        {"ANTHROPIC_API_KEY": "sk", "CLAUDE_MODEL": "claude-sonnet-5", "CLAUDE_FALLBACKS": "0"}
+        {
+            "OCR_ENGINE": "claude",
+            "ANTHROPIC_API_KEY": "sk",
+            "CLAUDE_MODEL": "claude-sonnet-5",
+            "CLAUDE_FALLBACKS": "0",
+        }
     )
     assert engine.model == "claude-sonnet-5" and engine.fallbacks is False
 
@@ -207,17 +224,30 @@ def no_sleep(monkeypatch):
 
 
 def test_yandex_request_shape():
-    engine, recorder = yandex(yandex_ok("текст\n"))
-    assert engine.recognize(WEBP, "image/webp") == "текст"
+    engine, recorder = yandex(yandex_ok("текст\n"), languages=("ru", "en"))
+    assert engine.recognize(PNG, "image/png") == "текст"
     (request,) = recorder.requests
     assert request.full_url == ENDPOINT and request.get_method() == "POST"
     assert request.get_header("Authorization") == "Api-Key key-1"
     assert request.get_header("X-folder-id") == "folder-1"
     assert request.get_header("Content-type") == "application/json"
     body = json.loads(request.data)
-    assert body["model"] == "handwritten" and body["languageCodes"] == ["ru"]
-    assert body["mimeType"] == "image/webp"
-    assert base64.standard_b64decode(body["content"]) == WEBP
+    assert body["model"] == "handwritten" and body["languageCodes"] == ["ru", "en"]
+    assert body["mimeType"] == "PNG", "сервис ждёт короткое имя формата, а не MIME-тип"
+    assert base64.standard_b64decode(body["content"]) == PNG
+
+
+def test_yandex_sends_jpeg_as_JPEG():
+    engine, recorder = yandex(yandex_ok("ок"))
+    engine.recognize(JPEG, "image/jpeg")
+    assert json.loads(recorder.requests[0].data)["mimeType"] == "JPEG"
+
+
+def test_yandex_refuses_webp_before_sending():
+    engine, recorder = yandex(yandex_ok("ок"))
+    with pytest.raises(RecognitionError, match="JPEG и PNG"):
+        engine.recognize(WEBP, "image/webp")
+    assert recorder.requests == []
 
 
 def test_yandex_bad_key_fails_at_once():

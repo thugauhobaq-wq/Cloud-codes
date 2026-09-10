@@ -44,20 +44,20 @@ jobs:
       - name: Сервер без ключа не поднимается
         run: |
           set +e
-          OCR_ENGINE=claude ANTHROPIC_API_KEY= python -m hwocr serve --port 8098 --data /tmp/hwocr-nokey 2>err.txt
+          OCR_ENGINE=yandex YC_API_KEY= python -m hwocr serve --port 8098 --data /tmp/hwocr-nokey 2>err.txt
           code=$?
           set -e
           test "$code" -eq 1
-          grep -q ANTHROPIC_API_KEY err.txt && echo "сообщает, чего не хватает"
+          grep -q YC_API_KEY err.txt && echo "сообщает, чего не хватает"
 
       - name: Проверить приложение и API
         run: |
-          OCR_ENGINE=claude ANTHROPIC_API_KEY=dummy python -m hwocr serve --port 8099 --data /tmp/hwocr-data &
+          OCR_ENGINE=yandex YC_API_KEY=dummy YC_FOLDER_ID=dummy python -m hwocr serve --port 8099 --data /tmp/hwocr-data &
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8099/api/config >/dev/null && break
             sleep 1
           done
-          curl -sf http://127.0.0.1:8099/api/config | grep -q '"engine": "claude"' && echo "движок выбран"
+          curl -sf http://127.0.0.1:8099/api/config | grep -q '"engine": "yandex"' && echo "движок выбран"
           curl -sf http://127.0.0.1:8099/ | grep -q '<title>' && echo "страница отдаётся"
           curl -sf http://127.0.0.1:8099/manifest.webmanifest | grep -q share_target
           curl -sf http://127.0.0.1:8099/sw.js >/dev/null && echo "service worker на месте"
@@ -74,10 +74,10 @@ jobs:
         run: docker build -t hwocr .
       - name: Запустить и постучаться
         run: |
-          docker run -d --name hwocr -p 8080:8080 -e OCR_ENGINE=claude -e ANTHROPIC_API_KEY=dummy hwocr
+          docker run -d --name hwocr -p 8080:8080 -e OCR_ENGINE=yandex -e YC_API_KEY=dummy -e YC_FOLDER_ID=dummy hwocr
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8080/api/config >/dev/null && break
             sleep 2
           done
-          curl -sf http://127.0.0.1:8080/api/config | grep -q claude
+          curl -sf http://127.0.0.1:8080/api/config | grep -q yandex
           docker rm -f hwocr

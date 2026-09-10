@@ -127,8 +127,9 @@ def test_listeners_see_running_then_done(store, tmp_path):
 
 
 def test_start_without_engine_fails_loudly(store, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setenv("OCR_ENGINE", "claude")
+    monkeypatch.delenv("YC_API_KEY", raising=False)
+    monkeypatch.delenv("YC_FOLDER_ID", raising=False)
+    monkeypatch.setenv("OCR_ENGINE", "yandex")
     queue = Queue(store)
-    with pytest.raises(Exception, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(Exception, match="YC_API_KEY"):
         queue.start()

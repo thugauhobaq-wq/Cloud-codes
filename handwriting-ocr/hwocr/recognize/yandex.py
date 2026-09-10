@@ -9,8 +9,9 @@
 один POST с JSON. В тестах вместо сети подставляется `opener`, принимающий
 готовый `Request`, — так проверяются и адрес, и заголовки, и тело.
 
-Из среды разработки этот адаптер вживую не проверялся: адрес сервиса закрыт
-прокси. Проверка — на настоящем сервере, см. README.
+Формат запроса сверен с исходниками API (`yandex-cloud/cloudapi`, ocr v1) и
+примером из документации; вживую из среды разработки адаптер не проверялся —
+адрес сервиса закрыт прокси. Проверка — на настоящем сервере, см. README.
 """
 
 from __future__ import annotations
@@ -27,6 +28,11 @@ from .base import RecognitionError
 
 ENDPOINT = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # предел сервиса на одну картинку
+# Сервис ждёт не MIME-тип, а короткое имя формата, и WebP не принимает вовсе.
+# Телефон и так шлёт JPEG; WebP может прийти только через «Поделиться».
+FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG"}
+# Модель `handwritten` знает только русский и английский.
+DEFAULT_LANGUAGES = ("ru",)
 
 Opener = Callable[[urllib.request.Request], bytes]
 
@@ -41,12 +47,14 @@ class YandexRecognizer:
         api_key: str,
         folder_id: str,
         *,
+        languages: tuple[str, ...] = DEFAULT_LANGUAGES,
         attempts: int = 3,
         timeout: float = 60.0,
         opener: Opener | None = None,
     ) -> None:
         self.api_key = api_key
         self.folder_id = folder_id
+        self.languages = list(languages) or list(DEFAULT_LANGUAGES)
         self.attempts = max(1, attempts)
         self.timeout = timeout
         self._open = opener or self._request
@@ -60,8 +68,8 @@ class YandexRecognizer:
     def _build(self, image: bytes, media_type: str) -> urllib.request.Request:
         payload = json.dumps(
             {
-                "mimeType": media_type,
-                "languageCodes": ["ru"],
+                "mimeType": FORMATS[media_type],
+                "languageCodes": self.languages,
                 "model": "handwritten",
                 "content": base64.standard_b64encode(image).decode("ascii"),
             }
@@ -82,6 +90,11 @@ class YandexRecognizer:
     # --- публичное ---------------------------------------------------------
 
     def recognize(self, image: bytes, media_type: str) -> str:
+        if media_type not in FORMATS:
+            raise RecognitionError(
+                "Яндекс принимает только JPEG и PNG — откройте фото в приложении, "
+                "оно само переведёт его в JPEG"
+            )
         if len(image) > MAX_IMAGE_BYTES:
             limit = MAX_IMAGE_BYTES // (1024 * 1024)
             raise RecognitionError(f"фото больше {limit} МБ — Яндекс такое не принимает")
