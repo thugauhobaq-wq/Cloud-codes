@@ -1,0 +1,47 @@
+{
+  "items": [
+    {
+      "id": "98765432",
+      "name": "Разработчик Telegram-ботов (Python, aiogram)",
+      "area": {"id": "1", "name": "Москва"},
+      "salary": {"from": 80000, "to": 150000, "currency": "RUR", "gross": false},
+      "published_at": "2026-09-12T09:15:00+0300",
+      "alternate_url": "https://hh.ru/vacancy/98765432",
+      "employer": {"id": "1", "name": "ООО Ромашка"},
+      "snippet": {
+        "requirement": "Опыт с <highlighttext>aiogram</highlighttext> от года.",
+        "responsibility": "Разработка и поддержка ботов для внутренних сервисов."
+      },
+      "professional_roles": [{"id": "96", "name": "Программист, разработчик"}],
+      "schedule": {"id": "remote", "name": "Удаленная работа"}
+    },
+    {
+      "id": "98765433",
+      "name": "Python-разработчик на проект",
+      "area": {"id": "2", "name": "Санкт-Петербург"},
+      "salary": null,
+      "published_at": "2026-09-12T08:40:00+0300",
+      "alternate_url": "https://hh.ru/vacancy/98765433",
+      "employer": {"id": "2", "name": "Студия Пример"},
+      "snippet": {"requirement": "Python, PostgreSQL.", "responsibility": null},
+      "professional_roles": [{"id": "96", "name": "Программист, разработчик"}],
+      "schedule": {"id": "remote", "name": "Удаленная работа"}
+    },
+    {
+      "id": "98765434",
+      "name": "Консультант по автоматизации",
+      "area": {"id": "1", "name": "Москва"},
+      "salary": {"from": null, "to": 2000, "currency": "EUR", "gross": false},
+      "published_at": "2026-09-12T07:05:00+0300",
+      "alternate_url": "https://hh.ru/vacancy/98765434",
+      "employer": {"id": "3", "name": "Intl Corp"},
+      "snippet": {"requirement": null, "responsibility": "Автоматизация процессов."},
+      "professional_roles": [],
+      "schedule": {"id": "remote", "name": "Удаленная работа"}
+    }
+  ],
+  "found": 3,
+  "pages": 1,
+  "page": 0,
+  "per_page": 50
+}

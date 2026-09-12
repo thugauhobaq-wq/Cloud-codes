@@ -62,8 +62,18 @@ async def test_defaults_when_nothing_saved(storage: Storage):
 
     assert filters.keywords == []
     assert filters.min_budget == 0
-    assert set(filters.sources) == {"kwork", "flru", "habr", "weblancer"}
     assert filters.paused is False
+    assert set(filters.sources) == {"kwork", "flru", "habr", "weblancer", "hh"}
+
+
+async def test_sources_needing_setup_start_disabled(storage: Storage):
+    """Telegram-каналы и Freelancehunt без списка каналов и без токена
+    работать не могут. Включённые по умолчанию, они писали бы в лог одну и ту
+    же жалобу каждые несколько минут."""
+    filters = await storage.get_filters()
+
+    assert "tg" not in filters.sources
+    assert "fh" not in filters.sources
 
 
 async def test_corrupted_setting_falls_back_to_default(storage: Storage):

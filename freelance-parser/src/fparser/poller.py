@@ -12,7 +12,7 @@ import logging
 import random
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from . import filters as filters_module
@@ -109,6 +109,14 @@ class Poller:
         что вообще проходит, а не что нового появилось за последнюю минуту.
         """
         active_filters = await self._storage.get_filters()
+
+        if only and only not in active_filters.sources:
+            # Площадку назвали явно — значит её и хотят проверить. Отбросить
+            # её фильтром «выключена» означало бы ответить «подошло 0» на
+            # единственную команду, которой источник и проверяют перед
+            # включением.
+            active_filters = replace(active_filters, sources=[*active_filters.sources, only])
+
         report = PollReport()
 
         for source in self._sources:

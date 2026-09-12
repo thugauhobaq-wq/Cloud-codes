@@ -26,7 +26,9 @@ from .config import Settings, load_settings
 from .formatter import format_order
 from .poller import Poller
 from .sender import Sender
-from .sources import ALL_SLUGS, Fetcher, build_sources
+from .sources import ALL_SLUGS, Fetcher, Source, build_sources
+from .sources.hh import USER_AGENT as hh_user_agent
+from .sources.telegram import channel_url, normalize_channel
 from .storage import Storage
 
 log = logging.getLogger("fparser")
@@ -49,7 +51,14 @@ FIXTURE_FILES = {
     "flru": "flru.xml",
     "habr": "habr.xml",
     "weblancer": "weblancer.xml",
+    "tg": "tg_channel.html",
+    "hh": "hh.json",
+    "fh": "freelancehunt.json",
 }
+
+#: Канал, который подставляется в режиме без сети: у Telegram-источника адрес
+#: зависит от списка каналов, а не от одного фиксированного `feed_url`.
+OFFLINE_CHANNEL = "botorders"
 
 
 def setup_logging(level: str) -> None:
@@ -84,6 +93,55 @@ def strip_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text)
 
 
+def _probe_headers(source: Source) -> dict[str, str]:
+    """Заголовки, без которых площадка ответит не тем, чем в бою."""
+    if source.slug == "hh":
+        return {"User-Agent": hh_user_agent, "Accept": "application/json"}
+    if source.slug == "fh":
+        token = getattr(source, "token", "")
+        return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    return {}
+
+
+def _suffix(response: httpx.Response) -> str:
+    content_type = response.headers.get("content-type", "")
+    if "json" in content_type:
+        return ".json"
+    if "html" in content_type:
+        return ".html"
+    return ".xml"
+
+
+def _fixture_map(sources: list[Source]) -> dict[str, Path]:
+    """Сопоставить адрес запроса файлу фикстуры.
+
+    У Telegram-источника адрес зависит от канала, а не от одного `feed_url`,
+    поэтому его случай разбирается отдельно.
+    """
+    mapping: dict[str, Path] = {}
+    for source in sources:
+        path = FIXTURE_DIR / FIXTURE_FILES[source.slug]
+        key = channel_url(OFFLINE_CHANNEL) if source.slug == "tg" else source.feed_url
+        mapping[key] = path
+    return mapping
+
+
+async def _seed_channels(storage: Storage, settings: Settings) -> None:
+    """Перенести каналы из `.env` в базу при самом первом запуске.
+
+    Дальше список живёт в базе: добавили канал командой — и он не должен
+    затираться значением из файла при следующем рестарте.
+    """
+    seed = settings.seed_channels()
+    if not seed or await storage.telegram_channels():
+        return
+
+    channels = [name for name in (normalize_channel(raw) for raw in seed) if name]
+    if channels:
+        await storage.set_telegram_channels(channels)
+        log.info("каналы взяты из .env: %s", ", ".join(channels))
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # run
 # ──────────────────────────────────────────────────────────────────────────────
@@ -102,8 +160,15 @@ async def command_run(settings: Settings) -> None:
     async def notify_owner(text: str) -> bool:
         return await sender.send_text(text, chat_id=settings.owner_id)
 
+    await _seed_channels(storage, settings)
+
     poller = Poller(
-        sources=build_sources(settings.feed_overrides()),
+        sources=build_sources(
+            settings.feed_overrides(),
+            channels_provider=storage.telegram_channels,
+            hh_query=settings.hh_query,
+            freelancehunt_token=settings.freelancehunt_token,
+        ),
         fetcher=fetcher,
         storage=storage,
         sender=sender,
@@ -157,7 +222,19 @@ async def command_dryrun(settings: Settings, args: argparse.Namespace) -> int:
     storage = Storage(settings.db_path)
     await storage.open()
 
-    sources = build_sources(settings.feed_overrides())
+    channels_provider = storage.telegram_channels
+    if args.offline:
+        # В режиме без сети список каналов берём не из базы: фикстура одна,
+        # и она должна отработать на чистой установке.
+        async def channels_provider() -> list[str]:  # type: ignore[misc]
+            return [OFFLINE_CHANNEL]
+
+    sources = build_sources(
+        settings.feed_overrides(),
+        channels_provider=channels_provider,
+        hh_query=settings.hh_query,
+        freelancehunt_token=settings.freelancehunt_token or ("offline" if args.offline else None),
+    )
 
     if args.offline:
         missing = [
@@ -167,9 +244,7 @@ async def command_dryrun(settings: Settings, args: argparse.Namespace) -> int:
             print(f"Нет фикстур для: {', '.join(missing)} (искал в {FIXTURE_DIR})")
             await storage.close()
             return 1
-        fetcher: Fetcher = FixtureFetcher(
-            {source.feed_url: FIXTURE_DIR / FIXTURE_FILES[source.slug] for source in sources}
-        )
+        fetcher: Fetcher = FixtureFetcher(_fixture_map(sources))
         print(f"Режим без сети: беру данные из {FIXTURE_DIR}\n")
     else:
         fetcher = Fetcher(timeout=settings.request_timeout, proxy_url=settings.http_proxy_url)
@@ -225,31 +300,60 @@ async def command_dryrun(settings: Settings, args: argparse.Namespace) -> int:
 
 
 async def command_probe(settings: Settings, args: argparse.Namespace) -> int:
-    sources = {source.slug: source for source in build_sources(settings.feed_overrides())}
+    storage = Storage(settings.db_path)
+    await storage.open()
+    try:
+        sources = {
+            source.slug: source
+            for source in build_sources(
+                settings.feed_overrides(),
+                channels_provider=storage.telegram_channels,
+                hh_query=settings.hh_query,
+                freelancehunt_token=settings.freelancehunt_token,
+            )
+        }
+        return await _probe_source(sources, settings, args)
+    finally:
+        await storage.close()
+
+
+async def _probe_source(
+    sources: dict[str, Source], settings: Settings, args: argparse.Namespace
+) -> int:
     source = sources.get(args.source)
     if source is None:
         print(f"Не знаю площадку {args.source}. Доступны: {', '.join(sources)}")
         return 1
 
+    # У Telegram-источника нет единого адреса — щупаем первый из списка каналов.
+    if source.slug == "tg":
+        channels = await source.channels()  # type: ignore[attr-defined]
+        if not channels:
+            print("Сначала добавьте канал командой /tg_add @канал")
+            return 1
+        target = channel_url(channels[0])
+    else:
+        target = source.feed_url
+
     fetcher = Fetcher(timeout=settings.request_timeout, proxy_url=settings.http_proxy_url)
     try:
-        response = await fetcher.get(source.feed_url)
+        response = await fetcher.get(target, headers=_probe_headers(source))
     except Exception as exc:
         # probe — диагностический режим: пользователю нужна причина, а не трейсбек.
-        print(f"Не удалось скачать {source.feed_url}: {exc}")
+        print(f"Не удалось скачать {target}: {exc}")
         return 1
     finally:
         await fetcher.aclose()
 
-    suffix = ".html" if "html" in response.headers.get("content-type", "") else ".xml"
-    out_path = Path(args.out) if args.out else FIXTURE_DIR / f"{source.slug}_probe{suffix}"
+    default_name = f"{source.slug}_probe{_suffix(response)}"
+    out_path = Path(args.out) if args.out else FIXTURE_DIR / default_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(response.content)
 
     print(f"Сохранил {len(response.content)} байт в {out_path}")
 
     try:
-        orders = await source.fetch(FixtureFetcher({source.feed_url: out_path}))
+        orders = await source.fetch(FixtureFetcher({target: out_path}))
     except Exception as exc:
         print(f"Разобрать не удалось: {exc}")
         return 1

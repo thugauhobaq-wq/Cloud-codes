@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     feed_url_flru: str | None = Field(default=None)
     feed_url_habr: str | None = Field(default=None)
     feed_url_weblancer: str | None = Field(default=None)
+    feed_url_hh: str | None = Field(default=None)
+    feed_url_fh: str | None = Field(default=None)
+
+    # Источники с собственными настройками
+    hh_query: str | None = Field(default=None, description="Строка поиска вакансий на hh.ru")
+    freelancehunt_token: str | None = Field(default=None, description="Ключ Freelancehunt API")
+    tg_channels: str | None = Field(
+        default=None,
+        description="Каналы через запятую — только для первого запуска, дальше правятся в боте",
+    )
 
     log_level: str = Field(default="INFO")
 
@@ -46,7 +56,18 @@ class Settings(BaseSettings):
             "flru": self.feed_url_flru,
             "habr": self.feed_url_habr,
             "weblancer": self.feed_url_weblancer,
+            "hh": self.feed_url_hh,
+            "fh": self.feed_url_fh,
         }
+
+    def seed_channels(self) -> list[str]:
+        """Каналы из `.env` — затравка для самого первого запуска.
+
+        Дальше список живёт в БД и правится командами бота, поэтому значение
+        отсюда применяется, только пока в базе пусто.
+        """
+        raw = self.tg_channels or ""
+        return [item.strip() for item in raw.replace(",", " ").split() if item.strip()]
 
     def require_telegram(self) -> None:
         """Проверить, что боевой режим сконфигурирован.

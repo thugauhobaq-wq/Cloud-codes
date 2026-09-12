@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "id": 1310239,
+      "type": "project",
+      "attributes": {
+        "name": "Разработка Telegram-бота для записи клиентов",
+        "description": "Нужен бот с записью на услуги, напоминаниями и админкой.",
+        "budget": {"amount": 12000, "currency": "UAH"},
+        "published_at": "2026-09-12T10:00:00+03:00",
+        "is_remote_job": true,
+        "skills": [{"id": 92, "name": "Python"}, {"id": 12, "name": "Боты"}]
+      },
+      "links": {
+        "self": {
+          "api": "https://api.freelancehunt.com/v2/projects/1310239",
+          "web": "https://freelancehunt.com/project/razrabotka-telegram-bota/1310239.html"
+        }
+      }
+    },
+    {
+      "id": 1310240,
+      "type": "project",
+      "attributes": {
+        "name": "Парсер объявлений с сайта",
+        "description": "Сбор данных &amp; выгрузка в таблицу.",
+        "budget": {"amount": 300, "currency": "USD"},
+        "published_at": "2026-09-12T09:30:00+03:00",
+        "is_remote_job": true,
+        "skills": [{"id": 92, "name": "Python"}]
+      },
+      "links": {
+        "self": {
+          "api": "https://api.freelancehunt.com/v2/projects/1310240",
+          "web": "https://freelancehunt.com/project/parser-obyavleniy/1310240.html"
+        }
+      }
+    },
+    {
+      "id": 1310241,
+      "type": "project",
+      "attributes": {
+        "name": "Нужна консультация по 1С",
+        "description": "Разовая задача.",
+        "budget": null,
+        "published_at": "2026-09-12T09:00:00+03:00",
+        "is_remote_job": true,
+        "skills": []
+      },
+      "links": {}
+    }
+  ]
+}
