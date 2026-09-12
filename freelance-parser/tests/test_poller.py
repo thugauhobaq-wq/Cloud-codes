@@ -253,6 +253,20 @@ async def test_skip_dedup_shows_everything(storage: Storage):
 
 
 @respx.mock
+async def test_targeting_a_disabled_board_still_shows_its_orders(storage: Storage):
+    """`dryrun --source X` — единственная команда, которой источник проверяют
+    перед включением. Ответить на неё «подошло 0» из-за того, что он пока
+    выключен, значит сделать её бесполезной."""
+    mock_both_boards()
+    await storage.save_filters(Filters(sources=["flru"]))
+    poller = build_poller(storage, FakeSender())
+
+    report = await poller.collect(only="kwork")
+
+    assert len(report.accepted) == 3
+
+
+@respx.mock
 async def test_collect_can_target_one_board(storage: Storage):
     mock_both_boards()
     poller = build_poller(storage, FakeSender())

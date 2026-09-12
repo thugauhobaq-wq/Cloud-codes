@@ -26,6 +26,18 @@ log = logging.getLogger(__name__)
 #: поэтому месяца с запасом хватает, чтобы старый заказ не приехал «новым».
 RETENTION_DAYS = 30
 
+#: Ключ в `settings`, под которым лежит список отслеживаемых Telegram-каналов.
+TELEGRAM_CHANNELS_KEY = "telegram_channels"
+
+#: Источники, включённые сразу. Те, что требуют настройки — Telegram-каналы
+#: (нужен список) и Freelancehunt (нужен токен), — стартуют выключенными:
+#: иначе сервис писал бы в лог одну и ту же жалобу каждые несколько минут.
+#: Telegram включается сам при первом `/tg_add`, Freelancehunt — вручную через
+#: `/sources`, когда токен окажется в `.env`.
+DEFAULT_SOURCES: tuple[str, ...] = tuple(
+    slug for slug in ALL_SLUGS if slug not in {"tg", "fh"}
+)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS orders (
     uid           TEXT PRIMARY KEY,
@@ -34,6 +46,7 @@ CREATE TABLE IF NOT EXISTS orders (
     url           TEXT NOT NULL,
     budget_min    INTEGER,
     budget_max    INTEGER,
+    currency      TEXT NOT NULL DEFAULT '₽',
     category      TEXT,
     first_seen_at TEXT NOT NULL,
     sent          INTEGER NOT NULL DEFAULT 0
@@ -83,7 +96,7 @@ class Filters:
 
     stopwords: list[str] = field(default_factory=list)
     min_budget: int = 0
-    sources: list[str] = field(default_factory=lambda: list(ALL_SLUGS))
+    sources: list[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
     categories: list[str] = field(default_factory=list)
     """Белый список рубрик. Пустой — без ограничения по рубрике."""
 
@@ -115,9 +128,27 @@ class Storage:
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
+        await self._migrate()
         # WAL — чтобы чтение статистики не блокировалось записью из поллера.
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.commit()
+
+    async def _migrate(self) -> None:
+        """Догнать схему на базе, созданной прошлой версией.
+
+        `CREATE TABLE IF NOT EXISTS` существующую таблицу не трогает, поэтому
+        новые колонки надо добавлять руками — иначе обновление сервиса падало
+        бы на первом же запросе.
+        """
+        async with self._db.execute("PRAGMA table_info(orders)") as cursor:  # type: ignore[union-attr]
+            columns = {row["name"] for row in await cursor.fetchall()}
+
+        if "currency" not in columns:
+            await self._db.execute(  # type: ignore[union-attr]
+                "ALTER TABLE orders ADD COLUMN currency TEXT NOT NULL DEFAULT '₽'"
+            )
+            await self._db.commit()  # type: ignore[union-attr]
+            log.info("в таблицу orders добавлена колонка currency")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -177,6 +208,7 @@ class Storage:
                 order.url,
                 order.budget_min,
                 order.budget_max,
+                order.currency,
                 order.category,
                 datetime.now(UTC).isoformat(),
                 1 if sent else 0,
@@ -189,8 +221,9 @@ class Storage:
         async with self._lock:
             await self._conn.executemany(
                 """INSERT OR IGNORE INTO orders
-                   (uid, source, title, url, budget_min, budget_max, category, first_seen_at, sent)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (uid, source, title, url, budget_min, budget_max, currency,
+                    category, first_seen_at, sent)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             await self._conn.commit()
@@ -329,6 +362,31 @@ class Storage:
             "SELECT * FROM orders WHERE uid = ?", (uid,)
         ) as cursor:
             return await cursor.fetchone()
+
+    # ── отслеживаемые Telegram-каналы ─────────────────────────────────────
+
+    async def telegram_channels(self) -> list[str]:
+        """Каналы, за которыми следим.
+
+        Лежат в настройках, а не в `.env`: список правится командами бота с
+        телефона, и перезапуск контейнера ради нового канала был бы нелепым.
+        """
+        raw = await self.get_state(TELEGRAM_CHANNELS_KEY)
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            log.warning("список Telegram-каналов повреждён, считаю его пустым")
+            return []
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if str(item).strip()]
+
+    async def set_telegram_channels(self, channels: Sequence[str]) -> None:
+        await self.set_state(
+            TELEGRAM_CHANNELS_KEY, json.dumps(list(channels), ensure_ascii=False)
+        )
 
     # ── избранное ─────────────────────────────────────────────────────────
 

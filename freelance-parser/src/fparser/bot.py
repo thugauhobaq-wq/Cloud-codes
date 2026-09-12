@@ -26,6 +26,7 @@ from .formatter import escape, format_budget, humanize_age, source_title
 from .models import Order
 from .sender import CALLBACK_FAVORITE, CALLBACK_STOPWORD
 from .sources import ALL_SLUGS, source_titles
+from .sources.telegram import normalize_channel
 from .storage import Filters, Storage
 
 if TYPE_CHECKING:
@@ -44,6 +45,9 @@ BOT_COMMANDS = [
     BotCommand(command="budget", description="Минимальный бюджет"),
     BotCommand(command="sources", description="Площадки"),
     BotCommand(command="categories", description="Рубрики"),
+    BotCommand(command="tg", description="Telegram-каналы с заказами"),
+    BotCommand(command="tg_add", description="Добавить канал"),
+    BotCommand(command="tg_del", description="Убрать канал"),
     BotCommand(command="last", description="Последние отправленные"),
     BotCommand(command="favorites", description="Избранное"),
     BotCommand(command="stats", description="Статистика за неделю"),
@@ -55,7 +59,7 @@ BOT_COMMANDS = [
 
 HELP_TEXT = """<b>Парсер заказов с фриланс-бирж</b>
 
-Слежу за Kwork, FL.ru, Habr Freelance и Weblancer и присылаю подходящие заказы.
+Слежу за биржами и Telegram-каналами и присылаю подходящие заказы.
 
 <b>Фильтры</b>
 /kw — ключевые слова, /kw_add питон бот, /kw_del бот
@@ -63,6 +67,7 @@ HELP_TEXT = """<b>Парсер заказов с фриланс-бирж</b>
 /budget 5000 — минимальный бюджет (0 — без порога)
 /sources — включить и выключить площадки
 /categories — отбор по рубрикам
+/tg — каналы, /tg_add @канал, /tg_del @канал
 
 <b>Что происходит</b>
 /status — состояние опроса
@@ -261,6 +266,81 @@ def _register_handlers(router: Router, storage: Storage, poller: Poller | None) 
             await callback.message.edit_reply_markup(
                 reply_markup=_categories_keyboard(known, filters)
             )
+
+    # ── Telegram-каналы ───────────────────────────────────────────────────
+
+    @router.message(Command("tg"))
+    async def cmd_channels(message: Message) -> None:
+        channels = await storage.telegram_channels()
+        if not channels:
+            await message.answer(
+                "📡 Каналы не добавлены.\n\n"
+                "Добавить: /tg_add @имя_канала\n"
+                "Подходит любой публичный канал с заказами — читаю его веб-версию, "
+                "подписываться и входить в аккаунт не нужно."
+            )
+            return
+
+        listed = "\n".join(f"• @{escape(name)}" for name in channels)
+        await message.answer(
+            f"📡 <b>Отслеживаю каналов: {len(channels)}</b>\n\n{listed}\n\n"
+            "Добавить: /tg_add @канал\nУбрать: /tg_del @канал",
+            parse_mode="HTML",
+        )
+
+    @router.message(Command("tg_add"))
+    async def cmd_channel_add(message: Message, command: CommandObject) -> None:
+        requested = _split_words(command.args)
+        if not requested:
+            await message.answer("Какой канал добавить? Пример: /tg_add @freelansim_ru")
+            return
+
+        channels = await storage.telegram_channels()
+        added, rejected = [], []
+        for raw in requested:
+            name = normalize_channel(raw)
+            if name is None:
+                rejected.append(raw)
+            elif name not in channels:
+                channels.append(name)
+                added.append(name)
+
+        if added:
+            await storage.set_telegram_channels(channels)
+            await _enable_source(storage, "tg")
+
+        lines = []
+        if added:
+            lines.append("Добавил: " + ", ".join(f"@{name}" for name in added))
+        if rejected:
+            lines.append("Не похоже на имя канала: " + ", ".join(rejected))
+        if not lines:
+            lines.append("Всё это уже в списке.")
+        lines.append(f"Сейчас отслеживаю каналов: {len(channels)}")
+
+        await message.answer("\n".join(lines))
+
+    @router.message(Command("tg_del"))
+    async def cmd_channel_del(message: Message, command: CommandObject) -> None:
+        requested = _split_words(command.args)
+        if not requested:
+            await message.answer("Какой канал убрать? Пример: /tg_del @freelansim_ru")
+            return
+
+        drop = {name for name in (normalize_channel(raw) for raw in requested) if name}
+        channels = await storage.telegram_channels()
+        remaining = [name for name in channels if name not in drop]
+
+        if len(remaining) == len(channels):
+            await message.answer("Ничего из этого в списке нет.")
+            return
+
+        await storage.set_telegram_channels(remaining)
+        await message.answer(
+            f"Убрал. Осталось каналов: {len(remaining)}"
+            if remaining
+            else "Убрал. Каналов больше нет — источник замолчит до следующего /tg_add."
+        )
 
     # ── пауза ─────────────────────────────────────────────────────────────
 
@@ -472,6 +552,19 @@ async def _remove_words(
     )
 
 
+async def _enable_source(storage: Storage, slug: str) -> None:
+    """Включить площадку, если она была выключена.
+
+    Добавить канал и не получить из него ни одного заказа — ровно то
+    непонятное поведение, за которым потом полчаса лезут в логи.
+    """
+    filters = await storage.get_filters()
+    if slug in filters.sources:
+        return
+    filters.sources = [item for item in ALL_SLUGS if item in {*filters.sources, slug}]
+    await storage.save_filters(filters)
+
+
 def _split_words(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -508,8 +601,17 @@ def _format_row_budget(row) -> str:
             url="",
             budget_min=row["budget_min"],
             budget_max=row["budget_max"],
+            currency=_row_currency(row),
         )
     )
+
+
+def _row_currency(row) -> str:
+    """Валюта из строки базы, с запасом для баз, созданных до её появления."""
+    try:
+        return row["currency"] or "₽"
+    except (IndexError, KeyError):
+        return "₽"
 
 
 def _parse_limit(raw: str | None, *, default: int, maximum: int) -> int:

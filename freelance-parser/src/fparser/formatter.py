@@ -42,7 +42,13 @@ def format_amount(value: int) -> str:
     return f"{value:,}".replace(",", " ")
 
 
-def format_budget(order: Order, currency: str = "₽") -> str:
+def format_budget(order: Order, currency: str | None = None) -> str:
+    """Бюджет заказа. Валюта берётся из самого заказа.
+
+    Не всё приходит в рублях: Freelancehunt отдаёт гривны и доллары, hh.ru —
+    иногда евро. Показать доллары со знаком рубля значит соврать о сумме.
+    """
+    currency = currency or order.currency or "₽"
     low, high = order.budget_min, order.budget_max
     if low is not None and high is not None:
         return f"{format_amount(low)} – {format_amount(high)} {currency}"

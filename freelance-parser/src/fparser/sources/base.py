@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from html import unescape
 
 import httpx
 from lxml import etree, html
@@ -267,7 +268,6 @@ def strip_html(raw: str) -> str:
     if not raw:
         return ""
 
-    text = raw
     if "<" in raw:
         # Переводы строк расставляем до разбора: text_content() склеивает
         # соседние блоки вплотную, и «…в Figma.<br/>Адаптив…» превращается
@@ -276,7 +276,11 @@ def strip_html(raw: str) -> str:
         try:
             text = html.fromstring(raw).text_content()
         except (etree.ParserError, etree.XMLSyntaxError):
-            text = re.sub(r"<[^>]+>", " ", raw)
+            text = unescape(re.sub(r"<[^>]+>", " ", raw))
+    else:
+        # Текст без тегов тоже бывает с сущностями: JSON-ответы API отдают
+        # «&amp;» внутри строки, и без этого он уезжал в канал как есть.
+        text = unescape(raw)
 
     text = text.replace("\xa0", " ")
     text = re.sub(r"[ \t]+", " ", text)
